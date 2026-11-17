@@ -70,3 +70,102 @@
     border-color: var(--color-accent);
   }
 }
+
+.tool-icon-library {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+.board-page .tool-rail .tool-button {
+  width: 48px;
+  height: 50px;
+  grid-template-rows: 20px auto;
+  gap: 1px;
+  align-content: center;
+  padding: 3px 1px;
+}
+
+.tool-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.tool-button-label {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.55rem;
+  font-weight: 600;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-page .tool-rail .shape-options button {
+  width: 32px;
+  height: 32px;
+}
+
+.shape-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.board-page .connection-dot {
+  width: 20px;
+  height: 20px;
+  color: white;
+
+  &:hover {
+    background: #2569c9;
+  }
+}
+
+.connection-icon {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.board-page .dot-up {
+  top: -10px;
+}
+
+.board-page .dot-right {
+  right: -10px;
+}
+
+.board-page .dot-down {
+  bottom: -10px;
+}
+
+.board-page .dot-left {
+  left: -10px;
+}
+
+@media (max-width: 700px) {
+  .board-page .tool-rail .tool-button {
+    width: 40px;
+    height: 46px;
+  }
+
+  .board-page .tool-rail .tool-button-label {
+    font-size: 0.48rem;
+  }
+
+  .board-page .tool-rail button:not(.tool-button) {
+    width: 36px;
+    height: 36px;
+  }
+}

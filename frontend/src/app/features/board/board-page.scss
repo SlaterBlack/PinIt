@@ -156,11 +156,6 @@
   gap: 6px;
 }
 
-.shape-options button {
-  width: 32px;
-  height: 32px;
-}
-
 .tool-rail button {
   display: grid;
   width: 40px;
@@ -409,40 +404,32 @@
   position: absolute;
   z-index: 5;
   display: grid;
-  width: 14px;
-  height: 14px;
   place-items: center;
   padding: 0;
   border: 2px solid white;
   border-radius: 50%;
   background: #3685ed;
   box-shadow: 0 1px 4px rgb(22 46 78 / 30%);
-  color: transparent;
   cursor: crosshair;
-  font-size: 0;
 }
 
 .dot-up {
-  top: -7px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .dot-right {
   top: 50%;
-  right: -7px;
   transform: translateY(-50%);
 }
 
 .dot-down {
-  bottom: -7px;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .dot-left {
   top: 50%;
-  left: -7px;
   transform: translateY(-50%);
 }
 
@@ -926,11 +913,6 @@
   .tool-rail {
     gap: var(--space-xs);
     padding-inline: var(--space-xs);
-
-    button {
-      width: 36px;
-      height: 36px;
-    }
   }
 
   .board-canvas {

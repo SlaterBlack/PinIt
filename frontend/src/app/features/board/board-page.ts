@@ -193,40 +193,37 @@ export class BoardPage implements OnInit, OnDestroy {
       ? "Getting started"
       : (this.board()?.title ?? "Loading board…"),
   );
-  readonly tools: { id: BoardTool; label: string; icon: string }[] = [
-    { id: "select", label: "Select (V)", icon: "↖" },
-    { id: "hand", label: "Hand (H)", icon: "✋" },
-    { id: "note", label: "Sticky note (N)", icon: "▤" },
-    { id: "text", label: "Text (T)", icon: "T" },
-    { id: "shape", label: "Shapes (S)", icon: "◇" },
-    { id: "card", label: "Card", icon: "▱" },
-    { id: "line", label: "Connection line (L)", icon: "↗" },
-    { id: "pen", label: "Pen (P)", icon: "／" },
-    { id: "eraser", label: "Eraser (E)", icon: "⌫" },
-    { id: "lasso", label: "Lasso (Q)", icon: "◯" },
-    { id: "frame", label: "Frame (F)", icon: "▣" },
-    { id: "comment", label: "Comment (C)", icon: "▢" },
-    { id: "sticker", label: "Sticker", icon: "★" },
+  readonly tools: {
+    id: BoardTool;
+    label: string;
+    shortLabel: string;
+  }[] = [
+    { id: "select", label: "Select (V)", shortLabel: "Select" },
+    { id: "hand", label: "Hand (H)", shortLabel: "Hand" },
+    { id: "note", label: "Sticky note (N)", shortLabel: "Note" },
+    { id: "text", label: "Text (T)", shortLabel: "Text" },
+    { id: "shape", label: "Shapes (S)", shortLabel: "Shapes" },
+    { id: "card", label: "Card", shortLabel: "Card" },
+    { id: "line", label: "Connection line (L)", shortLabel: "Line" },
+    { id: "pen", label: "Pen (P)", shortLabel: "Pen" },
+    { id: "eraser", label: "Eraser (E)", shortLabel: "Erase" },
+    { id: "lasso", label: "Lasso (Q)", shortLabel: "Lasso" },
+    { id: "frame", label: "Frame (F)", shortLabel: "Frame" },
+    { id: "comment", label: "Comment (C)", shortLabel: "Comment" },
+    { id: "sticker", label: "Sticker", shortLabel: "Sticker" },
   ];
   readonly shapeKinds: {
     id: BoardShapeKind;
     label: string;
-    icon: string;
   }[] = [
-    { id: "rectangle", label: "Rectangle", icon: "▱" },
-    { id: "ellipse", label: "Ellipse", icon: "◯" },
-    { id: "arrow", label: "Arrow", icon: "➜" },
+    { id: "rectangle", label: "Rectangle" },
+    { id: "ellipse", label: "Ellipse" },
+    { id: "arrow", label: "Arrow" },
   ];
   readonly colorOptions: NoteColor[] = ["cream", "rose", "sage", "sky"];
   readonly connectionDirections: {
     id: "up" | "right" | "down" | "left";
-    icon: string;
-  }[] = [
-    { id: "up", icon: "●" },
-    { id: "right", icon: "●" },
-    { id: "down", icon: "●" },
-    { id: "left", icon: "●" },
-  ];
+  }[] = [{ id: "up" }, { id: "right" }, { id: "down" }, { id: "left" }];
   readonly paletteCommands: { id: PaletteCommandId; label: string }[] = [
     ...this.tools.map((tool) => ({
       id: tool.id,

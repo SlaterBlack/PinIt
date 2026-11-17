@@ -1,6 +1,6 @@
 # PinIt
 
-PinIt is an Angular app scaffold for visual collaboration and digital
+PinIt is an Angular application for visual collaboration and digital
 whiteboards, inspired by Miro. Its cream and dusty-rose palette supports both
 the standard and retro themes used across the related applications.
 
@@ -23,7 +23,21 @@ cd frontend && cp -n .env.example .env
 `frontend/.env` is ignored by Git. It contains the StoreIt API URL, frontend
 bind address and port, Nginx hostname, and systemd service account and path.
 The development and production servers load this file and proxy `/api`
-requests to StoreIt.
+requests and WebSocket upgrades to StoreIt.
+
+Configure board storage in the **StoreIt backend's** local `.env`:
+
+```dotenv
+PINIT_BOARD_ROOT=/path/to/board-data
+PINIT_ALLOWED_ORIGINS=https://pinit.example.com
+```
+
+Set `PINIT_BOARD_ROOT` to a directory writable by the StoreIt service account.
+PinIt boards are stored there as JSON files. `PINIT_ALLOWED_ORIGINS` must
+include the PinIt site's origin for live collaboration. The StoreIt backend
+environment example uses generic placeholders; keep machine-specific values
+in the ignored backend `.env`. After deploying the backend schema changes, run
+`npm run db:migrate` from the StoreIt backend directory.
 
 Start the development server:
 
@@ -54,8 +68,15 @@ configuration on the server, not in this repository; use the local
 `NGINX_SERVER_NAME` setting for the virtual host. The server process can run
 under systemd using `APP_DIRECTORY`, `APP_USER`, and `APP_GROUP` from `.env`.
 
-## Scaffold status
+## Boards and access
 
-The app has shared-account login, protected board routes, account theme sync,
-a boards landing page, and a sample whiteboard layout. Board persistence,
-editing tools, and real-time collaboration are not implemented yet.
+Signed-in users can create boards and edit their titles and sticky notes.
+Changes are saved through StoreIt and shared live with other users who have
+access to the board. The current canvas supports sticky notes, including
+editing, moving, and deleting them.
+
+StoreIt admins can create Demo users in the user-management page. Demo users
+have view-only access in ClockIt, ManageIt, and SplatIt. In PinIt they start
+with no board access; admins can grant view-only or edit access per board from
+PinIt's user-management page. Board permissions are checked by StoreIt, not
+only by the frontend. The sample board remains a public, read-only preview.

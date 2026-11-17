@@ -31,6 +31,7 @@ describe("Users", () => {
   });
 
   it("loads and lists users", () => {
+    httpMock.expectOne("/api/pinit/admin/boards").flush({ boards: [] });
     httpMock.expectOne("/api/users").flush({
       users: [
         {
@@ -50,6 +51,7 @@ describe("Users", () => {
   });
 
   it("creates a user and adds it to the list", () => {
+    httpMock.expectOne("/api/pinit/admin/boards").flush({ boards: [] });
     httpMock.expectOne("/api/users").flush({ users: [] });
     component.newName.set("New Person");
     component.newEmail.set("new@example.com");
@@ -80,10 +82,56 @@ describe("Users", () => {
   });
 
   it("does not call the API when required fields are missing", () => {
+    httpMock.expectOne("/api/pinit/admin/boards").flush({ boards: [] });
     httpMock.expectOne("/api/users").flush({ users: [] });
     component.createUser();
 
     httpMock.expectNone({ method: "POST", url: "/api/users" });
     expect(component.createError()).toContain("required");
+  });
+
+  it("lets admins set per-board access for Demo users", () => {
+    httpMock.expectOne("/api/pinit/admin/boards").flush({
+      boards: [
+        {
+          id: "board-id",
+          title: "Planning",
+          ownerId: "owner-id",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          grants: {},
+        },
+      ],
+    });
+    httpMock.expectOne("/api/users").flush({
+      users: [
+        {
+          id: "demo-user-id",
+          name: "Demo Person",
+          email: "demo@example.com",
+          role: "demo",
+        },
+      ],
+    });
+    fixture.detectChanges();
+
+    expect(component.demoUsers()).toHaveLength(1);
+    expect(component.selectedDemoUserId()).toBe("demo-user-id");
+    component.setDemoBoardAccess(component.boards()[0], "edit");
+
+    const request = httpMock.expectOne({
+      method: "PUT",
+      url: "/api/pinit/admin/boards/board-id/access/demo-user-id",
+    });
+    expect(request.request.body).toEqual({ permission: "edit" });
+    request.flush({
+      board: {
+        id: "board-id",
+        title: "Planning",
+        ownerId: "owner-id",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        grants: { "demo-user-id": "edit" },
+      },
+    });
+    expect(component.boards()[0].grants?.["demo-user-id"]).toBe("edit");
   });
 });

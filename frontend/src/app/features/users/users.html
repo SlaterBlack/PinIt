@@ -51,6 +51,7 @@
         >
           <option value="user">User</option>
           <option value="admin">Admin</option>
+          <option value="demo">Demo user</option>
         </select>
       </label>
       <button class="btn btn-primary" type="submit" [disabled]="isCreating()">
@@ -62,7 +63,63 @@
     }
   </form>
 
-  @if (isLoading()) {
+  @if (demoUsers().length > 0) {
+  <section class="card demo-access-card" aria-labelledby="demo-access-title">
+    <div>
+      <p class="eyebrow">PinIt boards</p>
+      <h2 id="demo-access-title">Demo user board access</h2>
+      <p class="subtitle">
+        Boards stay hidden unless you grant access. Editors can change board
+        titles and notes; viewers can only view.
+      </p>
+    </div>
+    <label class="demo-user-picker">
+      <span>Demo user</span>
+      <select
+        [ngModel]="selectedDemoUserId()"
+        (ngModelChange)="selectedDemoUserId.set($event)"
+        [ngModelOptions]="{ standalone: true }"
+      >
+        @for (user of demoUsers(); track user.id) {
+        <option [value]="user.id">{{ user.name }} ({{ user.email }})</option>
+        }
+      </select>
+    </label>
+    @if (accessError(); as error) {
+    <p class="error-text" role="alert">{{ error }}</p>
+    } @if (boardsLoading()) {
+    <p role="status">Loading boards…</p>
+    } @else if (boardsError(); as error) {
+    <div class="users-error">
+      <p class="error-text" role="alert">{{ error }}</p>
+      <button class="btn btn-secondary" type="button" (click)="loadBoards()">
+        Try again
+      </button>
+    </div>
+    } @else if (boards().length === 0) {
+    <p class="empty-users">No boards have been created yet.</p>
+    } @else {
+    <div class="demo-board-access-list">
+      @for (board of boards(); track board.id) {
+      <label class="demo-board-access-row">
+        <span>{{ board.title }}</span>
+        <select
+          [attr.aria-label]="'Access for ' + board.title"
+          [ngModel]="board.grants?.[selectedDemoUserId()] ?? ''"
+          (ngModelChange)="setDemoBoardAccess(board, $event)"
+          [ngModelOptions]="{ standalone: true }"
+          [disabled]="savingAccessBoardId() === board.id"
+        >
+          <option value="">Hidden</option>
+          <option value="view">View only</option>
+          <option value="edit">Can edit</option>
+        </select>
+      </label>
+      }
+    </div>
+    }
+  </section>
+  } @if (isLoading()) {
   <p role="status">Loading users…</p>
   } @else if (listError(); as error) {
   <div class="users-error">
@@ -92,6 +149,7 @@
             >
               <option value="user">User</option>
               <option value="admin">Admin</option>
+              <option value="demo">Demo user</option>
             </select>
           </label>
           <label>

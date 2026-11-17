@@ -16,12 +16,35 @@
         <span></span><span></span><span></span>
       </div>
       <p class="eyebrow">Start fresh</p>
-      <h2>Open a blank canvas</h2>
+      <h2>Create a board</h2>
       <p>
-        Set up a space for brainstorming, planning, and organizing your next
-        project.
+        Set up a shared space for brainstorming, planning, and organizing your
+        next project.
       </p>
-      <a class="btn btn-primary" routerLink="/boards/new">Open blank canvas</a>
+      @if (auth.currentUser()?.role === 'demo') {
+      <p class="access-note">
+        Demo accounts can open boards shared by an admin.
+      </p>
+      } @else {
+      <form class="create-board-form" (ngSubmit)="createBoard()">
+        <label class="visually-hidden" for="new-board-title">Board name</label>
+        <input
+          id="new-board-title"
+          name="newTitle"
+          type="text"
+          maxlength="120"
+          placeholder="Board name"
+          required
+          [ngModel]="newTitle()"
+          (ngModelChange)="newTitle.set($event)"
+        />
+        <button class="btn btn-primary" type="submit" [disabled]="isCreating()">
+          {{ isCreating() ? 'Creating…' : 'Create board' }}
+        </button>
+      </form>
+      @if (createError(); as error) {
+      <p class="error-message" role="alert">{{ error }}</p>
+      } }
     </article>
 
     <article class="start-card sample-card card">
@@ -39,8 +62,44 @@
     </article>
   </section>
 
-  <p class="scaffold-note">
-    Board creation, editing, and collaboration are not connected yet. This space
-    is the starting point for those features.
-  </p>
+  <section class="boards-section" aria-labelledby="boards-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Your workspace</p>
+        <h2 id="boards-title">Boards</h2>
+      </div>
+    </div>
+    @if (isLoading()) {
+    <p role="status">Loading boards…</p>
+    } @else if (listError(); as error) {
+    <div class="error-row">
+      <p class="error-message" role="alert">{{ error }}</p>
+      <button class="btn btn-secondary" type="button" (click)="loadBoards()">
+        Try again
+      </button>
+    </div>
+    } @else if (boards().length === 0) {
+    <p class="empty-boards">No boards yet. Create one to get started.</p>
+    } @else {
+    <div class="board-list">
+      @for (board of boards(); track board.id) {
+      <article class="board-card card">
+        <div class="board-card-copy">
+          <h3><a [routerLink]="['/boards', board.id]">{{ board.title }}</a></h3>
+          <span class="board-permission">{{ board.permission }}</span>
+        </div>
+        @if (board.permission === 'owner' || board.permission === 'admin') {
+        <button
+          class="btn btn-danger"
+          type="button"
+          (click)="deleteBoard(board)"
+        >
+          Delete
+        </button>
+        }
+      </article>
+      }
+    </div>
+    }
+  </section>
 </main>

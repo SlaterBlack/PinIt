@@ -4,6 +4,7 @@ import { HttpClient } from "@angular/common/http";
 import { Injectable, inject } from "@angular/core";
 import { Observable } from "rxjs";
 import type { User as UserModel, UserRole } from "../models/user.model";
+import type { BoardGrant, BoardSummary } from "../models/board.model";
 
 export interface ManagedUser extends Omit<UserModel, "role"> {
   role: UserRole;
@@ -46,5 +47,20 @@ export class User {
 
   remove(id: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${encodeURIComponent(id)}`);
+  }
+
+  listBoardsForAdmin(): Observable<{ boards: BoardSummary[] }> {
+    return this.http.get<{ boards: BoardSummary[] }>("/api/pinit/admin/boards");
+  }
+
+  setDemoBoardAccess(
+    boardId: string,
+    userId: string,
+    permission: BoardGrant | null,
+  ): Observable<{ board: BoardSummary }> {
+    return this.http.put<{ board: BoardSummary }>(
+      `/api/pinit/admin/boards/${encodeURIComponent(boardId)}/access/${encodeURIComponent(userId)}`,
+      { permission },
+    );
   }
 }

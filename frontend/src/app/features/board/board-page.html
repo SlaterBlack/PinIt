@@ -5,62 +5,61 @@
       Boards
     </a>
     <div class="board-title-wrap">
-      <h1>{{ title }}</h1>
       @if (isSample) {
+      <h1>{{ title() }}</h1>
       <span class="sample-label">Sample</span>
-      }
+      } @else {
+      <input
+        class="board-title-input"
+        type="text"
+        aria-label="Board title"
+        maxlength="120"
+        [readonly]="!canEdit()"
+        [ngModel]="titleDraft()"
+        (ngModelChange)="titleDraft.set($event)"
+        (focus)="beginLocalEdit()"
+        (blur)="saveTitle()"
+        (keydown.enter)="saveTitleOnEnter($event)"
+      />
+      @if (permission() === 'view') {
+      <span class="view-only-label">View only</span>
+      } }
     </div>
-    <span class="save-state"
-      >{{ isSample ? 'Preview board' : 'Canvas scaffold' }}</span
-    >
+    @if (isSample) {
+    <span class="save-state">Preview board</span>
+    } @else {
+    <span class="save-state">
+      <span>{{ liveStatus() }}</span>
+      <span aria-hidden="true">·</span>
+      {{ saveState() }}
+    </span>
+    }
   </header>
 
+  @if (errorMessage(); as error) {
+  <p class="board-error" role="alert">{{ error }}</p>
+  } @if (isLoading()) {
+  <div class="board-loading" role="status">Loading board…</div>
+  } @else {
   <div class="board-workspace">
     <aside class="tool-rail" aria-label="Board tools">
       <p>Tools</p>
       <button
         type="button"
-        disabled
-        aria-label="Select tool, coming soon"
-        title="Coming soon"
-      >
-        ↖
-      </button>
-      <button
-        type="button"
-        disabled
-        aria-label="Sticky note tool, coming soon"
-        title="Coming soon"
+        [disabled]="isSample || !canEdit() || isSaving()"
+        aria-label="Add sticky note"
+        title="Add sticky note"
+        (click)="addNote()"
       >
         ▤
       </button>
-      <button
-        type="button"
-        disabled
-        aria-label="Text tool, coming soon"
-        title="Coming soon"
-      >
-        T
-      </button>
-      <button
-        type="button"
-        disabled
-        aria-label="Shape tool, coming soon"
-        title="Coming soon"
-      >
-        ◇
-      </button>
-      <button
-        type="button"
-        disabled
-        aria-label="Connector tool, coming soon"
-        title="Coming soon"
-      >
-        ⌁
-      </button>
+      <span class="tool-hint">
+        {{ isSample ? 'Preview' : canEdit() ? 'Add note' : 'Read only' }}
+      </span>
     </aside>
 
     <section
+      #canvas
       class="board-canvas"
       [class.sample-canvas]="isSample"
       aria-label="Board canvas"
@@ -78,16 +77,73 @@
         <strong>Make a plan</strong>
         <span>Turn the strongest ideas into next steps.</span>
       </article>
-      } @else {
+      } @else if (board(); as currentBoard) { @for (note of
+      currentBoard.elements; track note.id) {
+      <article
+        class="sticky-note editable-note"
+        [class.note-rose]="note.color === 'rose'"
+        [class.note-cream]="note.color === 'cream'"
+        [class.note-sage]="note.color === 'sage'"
+        [class.note-sky]="note.color === 'sky'"
+        [class.is-dragging]="draggingNoteId() === note.id"
+        [style.left.%]="note.x"
+        [style.top.%]="note.y"
+      >
+        <div class="note-toolbar">
+          <button
+            type="button"
+            class="note-grip"
+            [disabled]="!canEdit()"
+            aria-label="Move note"
+            title="Drag to move"
+            (pointerdown)="startNoteDrag(note, $event)"
+            (pointermove)="moveNote($event)"
+            (pointerup)="finishNoteDrag()"
+            (pointercancel)="finishNoteDrag()"
+          >
+            ⠿
+          </button>
+          @if (canEdit()) {
+          <button
+            type="button"
+            class="note-delete"
+            [disabled]="isSaving()"
+            aria-label="Delete note"
+            title="Delete note"
+            (click)="removeNote(note)"
+          >
+            ×
+          </button>
+          }
+        </div>
+        <textarea
+          aria-label="Sticky note text"
+          maxlength="2000"
+          [readonly]="!canEdit()"
+          [ngModel]="note.text"
+          (ngModelChange)="changeNoteText(note.id, $event)"
+          (focus)="beginLocalEdit()"
+          (blur)="saveNoteText(note.id)"
+          placeholder="Write an idea…"
+        ></textarea>
+      </article>
+      } @empty {
       <div class="canvas-empty-state">
         <span class="empty-state-mark" aria-hidden="true">P</span>
         <h2>Your canvas is ready</h2>
         <p>
-          Board editing tools and shared collaboration are the next steps for
-          PinIt.
+          @if (canEdit()) { Add a sticky note to start collecting ideas
+          together. } @else { This board is empty. Ask an admin to add you as an
+          editor to contribute. }
         </p>
+      </div>
+      } } @else {
+      <div class="canvas-empty-state">
+        <h2>Board unavailable</h2>
+        <p>Go back to your boards and try again.</p>
       </div>
       }
     </section>
   </div>
+  }
 </main>

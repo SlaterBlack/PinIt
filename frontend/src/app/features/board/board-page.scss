@@ -42,6 +42,38 @@
   }
 }
 
+.board-title-input {
+  width: min(52vw, 460px);
+  min-width: 120px;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+
+  &:focus {
+    border-color: var(--color-border);
+    outline: 2px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  }
+
+  &[readonly] {
+    cursor: default;
+  }
+}
+
+.view-only-label {
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  background: var(--color-primary-light);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .sample-label {
   padding: 0.15rem 0.5rem;
   border-radius: 99px;
@@ -52,8 +84,25 @@
 }
 
 .save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
   color: var(--color-text-muted);
   font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.board-error {
+  margin: 0;
+  color: var(--color-danger, #a23b45);
+  font-size: 0.875rem;
+}
+
+.board-loading {
+  display: grid;
+  min-height: 480px;
+  place-items: center;
+  color: var(--color-text-muted);
 }
 
 .board-workspace {
@@ -93,9 +142,26 @@
     border-radius: var(--radius-md);
     background: var(--color-bg);
     color: var(--color-text-muted);
-    cursor: not-allowed;
+    cursor: pointer;
     font-size: 1.1rem;
-    opacity: 0.6;
+
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    &:not(:disabled):hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+  }
+
+  .tool-hint {
+    max-width: 48px;
+    color: var(--color-text-muted);
+    font-size: 0.62rem;
+    line-height: 1.2;
+    text-align: center;
   }
 }
 
@@ -171,6 +237,109 @@
     font-size: 0.92rem;
   }
 
+  .editable-note {
+    display: flex;
+    min-height: 150px;
+    flex-direction: column;
+    gap: var(--space-xs);
+    transform: rotate(-1deg);
+    touch-action: none;
+
+    textarea {
+      width: 100%;
+      min-height: 105px;
+      flex: 1;
+      resize: vertical;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--color-text);
+      font: inherit;
+      font-size: 0.85rem;
+      line-height: 1.4;
+
+      &::placeholder {
+        color: var(--color-text-muted);
+      }
+
+      &[readonly] {
+        resize: none;
+      }
+    }
+
+    &.is-dragging {
+      z-index: 1;
+      box-shadow: 0 14px 28px rgb(65 38 40 / 22%);
+    }
+  }
+
+  .note-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .note-grip,
+  .note-delete {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    font: inherit;
+    font-size: 1rem;
+  }
+
+  .note-grip {
+    cursor: grab;
+    touch-action: none;
+
+    &:active {
+      cursor: grabbing;
+    }
+
+    &:disabled {
+      cursor: default;
+    }
+  }
+
+  .note-delete {
+    cursor: pointer;
+    font-size: 1.25rem;
+
+    &:hover {
+      background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+      color: var(--color-accent);
+    }
+  }
+
+  .note-rose {
+    background: color-mix(
+      in srgb,
+      var(--color-accent) 12%,
+      var(--color-surface)
+    );
+  }
+
+  .note-cream {
+    background: color-mix(
+      in srgb,
+      var(--color-primary) 22%,
+      var(--color-surface)
+    );
+  }
+
+  .note-sage {
+    background: color-mix(in srgb, #8ca99a 24%, var(--color-surface));
+  }
+
+  .note-sky {
+    background: color-mix(in srgb, #9fbad0 28%, var(--color-surface));
+  }
+
   span {
     color: var(--color-text-muted);
     font-size: 0.8rem;
@@ -213,6 +382,10 @@
   .save-state {
     flex-basis: 100%;
     padding-left: 3.5rem;
+  }
+
+  .board-title-input {
+    width: min(60vw, 420px);
   }
 
   .board-workspace {

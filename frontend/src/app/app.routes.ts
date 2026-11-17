@@ -19,6 +19,7 @@ export const routes: Routes = [
     children: [
       { path: "", pathMatch: "full", redirectTo: "boards" },
       { path: "boards", component: BoardsPage },
+      { path: "boards/new", pathMatch: "full", redirectTo: "boards" },
       { path: "boards/:boardId", component: BoardPage },
       { path: "profile", component: Profile },
       { path: "users", canActivate: [adminGuard], component: Users },

@@ -38,6 +38,58 @@
   }
 }
 
+.demo-access-card {
+  display: grid;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  padding: var(--space-lg);
+
+  h2 {
+    margin: 0 0 var(--space-xs);
+    font-size: 1.1rem;
+  }
+}
+
+.demo-user-picker,
+.demo-board-access-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 260px);
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-weight: 600;
+
+  select {
+    width: 100%;
+    min-height: 38px;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+}
+
+.demo-user-picker {
+  max-width: 720px;
+}
+
+.demo-board-access-list {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.demo-board-access-row {
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--color-border);
+
+  span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 .new-user-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));

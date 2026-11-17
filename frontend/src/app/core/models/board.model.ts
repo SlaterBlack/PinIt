@@ -1,7 +1,43 @@
 export type BoardGrant = "view" | "edit";
 export type BoardPermission = BoardGrant | "owner" | "admin";
-export type NoteColor = "rose" | "cream" | "sage" | "sky";
-export type BoardShapeKind = "rectangle" | "ellipse" | "arrow";
+export type NoteColor =
+  | "cream"
+  | "yellow"
+  | "orange"
+  | "coral"
+  | "rose"
+  | "pink"
+  | "magenta"
+  | "lavender"
+  | "sky"
+  | "blue"
+  | "cyan"
+  | "teal"
+  | "sage"
+  | "green"
+  | "lime"
+  | "white"
+  | "black";
+export type BoardShapeKind =
+  | "rectangle"
+  | "ellipse"
+  | "rhombus"
+  | "triangle"
+  | "arrow"
+  | "elbowArrow"
+  | "blockArrow"
+  | "divider";
+export type BoardFontFamily = "inter" | "vt323" | "serif" | "mono";
+export type BoardTextAlign = "left" | "center" | "right";
+
+export interface BoardTextStyle {
+  color?: string;
+  fontFamily?: BoardFontFamily;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+  align?: BoardTextAlign;
+}
 
 export interface BoardPoint {
   x: number;
@@ -19,6 +55,7 @@ export interface BoardNote extends BoardElementBase {
   type: "note";
   text: string;
   color: NoteColor;
+  textStyle?: BoardTextStyle;
   width?: number;
   height?: number;
 }
@@ -27,6 +64,7 @@ export interface BoardText extends BoardElementBase {
   type: "text";
   text: string;
   color: NoteColor;
+  textStyle?: BoardTextStyle;
   width: number;
   height?: number;
   autoWidth?: boolean;
@@ -36,6 +74,7 @@ export interface BoardCard extends BoardElementBase {
   type: "card";
   title: string;
   text: string;
+  textStyle?: BoardTextStyle;
   width: number;
   height: number;
 }
@@ -47,6 +86,7 @@ export interface BoardShape extends BoardElementBase {
   height: number;
   color: NoteColor;
   text?: string;
+  textStyle?: BoardTextStyle;
 }
 
 export interface BoardStroke extends BoardElementBase {
@@ -76,11 +116,13 @@ export interface BoardSticker extends BoardElementBase {
 export interface BoardComment extends BoardElementBase {
   type: "comment";
   text: string;
+  textStyle?: BoardTextStyle;
 }
 
 export interface BoardFrame extends BoardElementBase {
   type: "frame";
   title: string;
+  textStyle?: BoardTextStyle;
   width: number;
   height: number;
 }
@@ -120,6 +162,7 @@ export interface BoardElementChanges {
   endElementId?: string | null;
   autoWidth?: boolean;
   locked?: boolean;
+  textStyle?: BoardTextStyle;
 }
 
 export type BoardElementOperation =

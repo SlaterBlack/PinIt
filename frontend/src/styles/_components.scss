@@ -169,3 +169,256 @@
     height: 36px;
   }
 }
+
+.board-page .board-workspace {
+  position: relative;
+}
+
+.board-page .board-error[role="alert"] {
+  flex: 0 0 auto;
+  margin: 4px 8px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-danger, #a23b45);
+  font-size: 0.875rem;
+}
+
+.board-page .tool-popover {
+  position: absolute;
+  z-index: 12;
+  top: 12px;
+  left: 84px;
+  display: flex;
+  width: min(300px, calc(100% - 96px));
+  max-height: calc(100% - 24px);
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+
+  h2 {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.9rem;
+  }
+}
+
+.sticky-color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.sticky-color-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid rgb(45 55 65 / 24%);
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgb(34 35 48 / 12%);
+  cursor: pointer;
+
+  &:hover,
+  &.is-selected {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+.stack-notes-action {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+
+  &:hover {
+    border-color: var(--color-accent);
+  }
+}
+
+.shape-picker {
+  gap: 8px;
+}
+
+.shape-picker-option {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+
+  &:hover,
+  &.is-selected {
+    border-color: var(--color-border);
+    background: var(--color-bg);
+  }
+}
+
+.shape-picker-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.shape-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+
+  .shape-picker-option {
+    min-width: 0;
+    font-size: 0.82rem;
+  }
+}
+
+.sticker-picker {
+  width: min(340px, calc(100% - 96px)) !important;
+}
+
+.sticker-search input {
+  width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.sticker-categories {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+
+  button {
+    flex: none;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.75rem;
+
+    &:hover,
+    &.is-selected {
+      background: var(--color-primary-light);
+      color: var(--color-text);
+    }
+  }
+}
+
+.sticker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+
+  button {
+    display: grid;
+    min-width: 0;
+    aspect-ratio: 1;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.45rem;
+
+    &:hover,
+    &.is-selected {
+      border-color: var(--color-border);
+      background: var(--color-primary-light);
+    }
+  }
+}
+
+.sticker-empty {
+  grid-column: 1 / -1;
+  margin: 8px 0;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.board-page .shape-item.shape-rhombus {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+.board-page .shape-item.shape-triangle {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.board-page .shape-item.shape-blockArrow {
+  clip-path: polygon(0 28%, 62% 28%, 62% 0, 100% 50%, 62% 100%, 62% 72%, 0 72%);
+}
+
+.board-page .shape-item.shape-elbowArrow {
+  clip-path: polygon(
+    0 15%,
+    68% 15%,
+    68% 0,
+    100% 30%,
+    68% 60%,
+    68% 45%,
+    24% 45%,
+    24% 75%,
+    68% 75%,
+    68% 60%,
+    100% 90%,
+    68% 100%,
+    68% 90%,
+    0 90%
+  );
+}
+
+.board-page .shape-item.shape-divider {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: var(--item-color);
+  clip-path: none;
+
+  .shape-label {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .board-page .tool-popover {
+    top: 8px;
+    left: 60px;
+    width: min(270px, calc(100% - 68px));
+    padding: 10px;
+  }
+
+  .board-page .sticker-picker {
+    width: min(290px, calc(100% - 68px)) !important;
+  }
+}

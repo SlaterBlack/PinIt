@@ -128,8 +128,23 @@
     <symbol id="board-icon-ellipse" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="8" />
     </symbol>
+    <symbol id="board-icon-rhombus" viewBox="0 0 24 24">
+      <path d="m12 2.5 9.5 9.5-9.5 9.5L2.5 12z" />
+    </symbol>
+    <symbol id="board-icon-triangle" viewBox="0 0 24 24">
+      <path d="M12 3 22 21H2z" />
+    </symbol>
     <symbol id="board-icon-arrow" viewBox="0 0 24 24">
       <path d="M4 18 19 6m-7 0h7v7" />
+    </symbol>
+    <symbol id="board-icon-elbowArrow" viewBox="0 0 24 24">
+      <path d="M4 20V8h10V4l6 6-6 6v-4H8v8" />
+    </symbol>
+    <symbol id="board-icon-blockArrow" viewBox="0 0 24 24">
+      <path d="M2 9h11V4l9 8-9 8v-5H2z" />
+    </symbol>
+    <symbol id="board-icon-divider" viewBox="0 0 24 24">
+      <path d="M3 12h18" />
     </symbol>
     <symbol id="board-icon-direction-up" viewBox="0 0 24 24">
       <path d="M12 20V4m-6 6 6-6 6 6" />
@@ -165,7 +180,7 @@
           [attr.aria-label]="tool.label"
           [title]="tool.label"
           (dragstart)="onToolDragStart($event, tool.id)"
-          (click)="setTool(tool.id)"
+          (click)="onToolButtonClick(tool.id)"
         >
           <svg class="tool-icon" aria-hidden="true" focusable="false">
             <use [attr.href]="'#board-icon-' + tool.id"></use>
@@ -176,32 +191,11 @@
         </button>
         }
       </div>
-      @if (selectedTool() === 'shape' && !isSample && canEdit()) {
-      <div class="shape-options" aria-label="Shape type">
-        @for (shape of shapeKinds; track shape.id) {
-        <button
-          type="button"
-          [class.is-active]="shapeKind() === shape.id"
-          [attr.aria-pressed]="shapeKind() === shape.id"
-          [attr.aria-label]="shape.label"
-          [title]="shape.label"
-          (click)="setShapeKind(shape.id)"
-        >
-          <svg
-            class="tool-icon shape-icon"
-            aria-hidden="true"
-            focusable="false"
-          >
-            <use [attr.href]="'#board-icon-' + shape.id"></use>
-          </svg>
-        </button>
-        }
-      </div>
-      }
       <span class="tool-hint">
-        @if (isSample) { Preview } @else if (!canEdit()) { Read only } @else {
-        {{ selectedTool() === 'select' ? 'Select · drag to move' :
-        selectedTool() + ' · click canvas' }} }
+        @if (isSample) { Preview } @else if (!canEdit()) { Read only } @else if
+        (stackNotesNext()) { Stack · click canvas } @else { {{ selectedTool()
+        === 'select' ? 'Select · drag to move' : selectedTool() + ' · click
+        canvas' }} }
       </span>
       <div class="history-tools" aria-label="History">
         <button
@@ -229,6 +223,121 @@
       </div>
       <span class="canvas-hint">Scroll to zoom<br />Right-drag to pan</span>
     </aside>
+
+    @if (activeToolMenu() === 'sticky') {
+    <section
+      class="tool-popover sticky-color-picker"
+      role="dialog"
+      aria-label="Sticky note colors"
+      (click)="$event.stopPropagation()"
+    >
+      <h2>Sticky note color</h2>
+      <div class="sticky-color-grid">
+        @for (color of colorOptions; track color) {
+        <button
+          type="button"
+          class="sticky-color-swatch"
+          [class.is-selected]="noteColor() === color"
+          [style.background-color]="colorFillValue(color)"
+          [attr.aria-label]="colorLabel(color) + ' sticky note'"
+          [title]="colorLabel(color)"
+          (click)="chooseNoteColor(color)"
+        ></button>
+        }
+      </div>
+      <button
+        class="stack-notes-action"
+        type="button"
+        (click)="createStickyStack()"
+      >
+        <span aria-hidden="true">▤</span>
+        Stack notes
+      </button>
+    </section>
+    } @if (activeToolMenu() === 'shape') {
+    <section
+      class="tool-popover shape-picker"
+      role="dialog"
+      aria-label="Shape tools"
+      (click)="$event.stopPropagation()"
+    >
+      <h2>Lines &amp; shapes</h2>
+      <button
+        class="shape-picker-option"
+        type="button"
+        (click)="setTool('line')"
+      >
+        <svg class="shape-picker-icon" aria-hidden="true" focusable="false">
+          <use href="#board-icon-line"></use>
+        </svg>
+        Line
+      </button>
+      <div class="shape-picker-grid">
+        @for (shape of shapeKinds; track shape.id) {
+        <button
+          class="shape-picker-option"
+          type="button"
+          [class.is-selected]="shapeKind() === shape.id"
+          [attr.aria-label]="shape.label"
+          [attr.aria-pressed]="shapeKind() === shape.id"
+          [title]="shape.label"
+          (click)="chooseShape(shape.id)"
+        >
+          <svg class="shape-picker-icon" aria-hidden="true" focusable="false">
+            <use [attr.href]="'#board-icon-' + shape.id"></use>
+          </svg>
+          {{ shape.label }}
+        </button>
+        }
+      </div>
+    </section>
+    } @if (activeToolMenu() === 'sticker') {
+    <section
+      class="tool-popover sticker-picker"
+      role="dialog"
+      aria-label="Sticker picker"
+      (click)="$event.stopPropagation()"
+    >
+      <h2>Stickers &amp; emoji</h2>
+      <label class="sticker-search">
+        <span class="visually-hidden">Search stickers</span>
+        <input
+          #stickerSearchInput
+          type="search"
+          placeholder="Search"
+          [ngModel]="stickerSearch()"
+          (ngModelChange)="stickerSearch.set($event)"
+        />
+      </label>
+      <div class="sticker-categories" aria-label="Sticker categories">
+        @for (category of stickerCategories; track category) {
+        <button
+          type="button"
+          [class.is-selected]="stickerCategory() === category"
+          [attr.aria-pressed]="stickerCategory() === category"
+          (click)="stickerCategory.set(category)"
+        >
+          {{ category }}
+        </button>
+        }
+      </div>
+      <div class="sticker-grid" aria-label="Available stickers">
+        @for (sticker of filteredStickerOptions(); track sticker.emoji) {
+        <button
+          type="button"
+          [class.is-selected]="selectedSticker() === sticker.emoji"
+          [attr.aria-label]="sticker.label"
+          [title]="sticker.label"
+          (click)="chooseSticker(sticker.emoji)"
+        >
+          {{ sticker.emoji }}
+        </button>
+        } @empty {
+        <p class="sticker-empty">No stickers match that search.</p>
+        }
+      </div>
+    </section>
+    }
 
     <section
       #canvas
@@ -274,6 +383,14 @@
           [style.top.%]="itemTop(item)"
           [style.width.%]="itemWidth(item)"
           [style.height.%]="itemHeight(item)"
+          [style.--item-color]="itemColorValue(item)"
+          [style.--item-fill]="itemFillValue(item)"
+          [style.color]="textStyleFor(item).color"
+          [style.font-family]="fontFamilyCss(textStyleFor(item).fontFamily)"
+          [style.font-size.px]="textStyleFor(item).fontSize"
+          [style.font-weight]="textStyleFor(item).bold ? 700 : 400"
+          [style.font-style]="textStyleFor(item).italic ? 'italic' : 'normal'"
+          [style.text-align]="textStyleFor(item).align"
           (pointerdown)="startElementDrag(item, $event)"
           (pointermove)="moveElement($event)"
           (pointerup)="finishElementDrag($event)"
@@ -344,6 +461,7 @@
             [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.title"
             (ngModelChange)="changeElementTitle(item.id, $event)"
+            [style.font-weight]="item.textStyle?.bold === false ? 400 : 700"
             (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
           />
@@ -368,7 +486,9 @@
             (blur)="saveTextEdit()"
           ></textarea>
           } @else {
-          <span class="shape-label" aria-hidden="true">{{ item.shape }}</span>
+          <span class="shape-label" aria-hidden="true"
+            >{{ shapeLabel(item.shape) }}</span
+          >
           } } @case ("stroke") {
           <svg
             class="stroke-svg"
@@ -439,6 +559,7 @@
             [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.title"
             (ngModelChange)="changeElementTitle(item.id, $event)"
+            [style.font-weight]="item.textStyle?.bold === false ? 400 : 700"
             (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
           />
@@ -519,14 +640,101 @@
         (click)="$event.stopPropagation()"
       >
         <span>{{ selectedElementIds().length }} selected</span>
-        @for (color of colorOptions; track color) {
+        @if (hasTextSelection()) {
+        <button
+          type="button"
+          [disabled]="isSaving() || selectionHasLockedItems()"
+          [attr.aria-expanded]="textFormattingOpen()"
+          (click)="toggleTextFormatting()"
+        >
+          Text
+        </button>
+        } @for (color of colorOptions; track color) {
         <button
           type="button"
           class="color-swatch"
-          [class]="'color-swatch swatch-' + color"
-          [attr.aria-label]="'Set color ' + color"
+          [style.background-color]="colorFillValue(color)"
+          [attr.aria-label]="'Set color ' + colorLabel(color)"
           (click)="applySelectedColor(color)"
         ></button>
+        } @if (textFormattingOpen() && hasTextSelection()) {
+        <div
+          class="text-format-controls"
+          role="group"
+          aria-label="Text formatting options"
+        >
+          <label>
+            <span>Color</span>
+            <input
+              type="color"
+              aria-label="Text color"
+              [value]="selectedTextStyle().color"
+              [disabled]="isSaving() || selectionHasLockedItems()"
+              (change)="changeTextColor($event)"
+            />
+          </label>
+          <label>
+            <span>Font</span>
+            <select
+              aria-label="Font family"
+              [value]="selectedTextStyle().fontFamily"
+              [disabled]="isSaving() || selectionHasLockedItems()"
+              (change)="changeFontFamily($event)"
+            >
+              @for (font of fontFamilies; track font.id) {
+              <option [value]="font.id">{{ font.label }}</option>
+              }
+            </select>
+          </label>
+          <label>
+            <span>Size</span>
+            <select
+              aria-label="Font size"
+              [value]="selectedTextStyle().fontSize"
+              [disabled]="isSaving() || selectionHasLockedItems()"
+              (change)="changeFontSize($event)"
+            >
+              @for (size of fontSizes; track size) {
+              <option [value]="size">{{ size }}</option>
+              }
+            </select>
+          </label>
+          <button
+            type="button"
+            [class.is-active]="selectedTextStyle().bold"
+            [attr.aria-pressed]="selectedTextStyle().bold"
+            aria-label="Bold"
+            title="Bold"
+            [disabled]="isSaving() || selectionHasLockedItems()"
+            (click)="toggleTextEmphasis('bold')"
+          >
+            <strong>B</strong>
+          </button>
+          <button
+            type="button"
+            [class.is-active]="selectedTextStyle().italic"
+            [attr.aria-pressed]="selectedTextStyle().italic"
+            aria-label="Italic"
+            title="Italic"
+            [disabled]="isSaving() || selectionHasLockedItems()"
+            (click)="toggleTextEmphasis('italic')"
+          >
+            <em>I</em>
+          </button>
+          @for (align of textAlignments; track align.id) {
+          <button
+            type="button"
+            [class.is-active]="selectedTextStyle().align === align.id"
+            [attr.aria-pressed]="selectedTextStyle().align === align.id"
+            [attr.aria-label]="align.label + ' text'"
+            [title]="align.label + ' text'"
+            [disabled]="isSaving() || selectionHasLockedItems()"
+            (click)="applyTextAlignment(align.id)"
+          >
+            {{ align.label[0] }}
+          </button>
+          }
+        </div>
         }
         <button
           type="button"

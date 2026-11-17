@@ -17,12 +17,15 @@ import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import {
   Board,
   BoardElement,
+  BoardFontFamily,
   NoteColor,
   BoardPermission,
   BoardPoint,
   BoardShapeKind,
   BoardElementOperation,
   NewBoardElement,
+  BoardTextAlign,
+  BoardTextStyle,
 } from "../../core/models/board.model";
 import { BoardLive } from "../../core/services/board-live";
 import { Boards } from "../../core/services/boards";
@@ -44,6 +47,20 @@ type BoardTool =
 
 type PlacementTool =
   "note" | "text" | "card" | "shape" | "frame" | "sticker" | "comment";
+type StickerCategory =
+  | "People"
+  | "Nature"
+  | "Food"
+  | "Activities"
+  | "Travel"
+  | "Objects"
+  | "Symbols";
+
+interface StickerOption {
+  emoji: string;
+  label: string;
+  category: StickerCategory;
+}
 
 interface ElementHistory {
   before: BoardElement[];
@@ -96,6 +113,12 @@ interface AlignmentGuides {
   horizontal: number[];
 }
 
+type BoardTextElement = Extract<
+  BoardElement,
+  { type: "note" | "text" | "card" | "shape" | "comment" | "frame" }
+>;
+type ResolvedBoardTextStyle = Required<BoardTextStyle>;
+
 type PaletteCommandId =
   | BoardTool
   | "undo"
@@ -110,6 +133,14 @@ type PaletteCommandId =
 const sceneWidth = 2400;
 const sceneHeight = 1600;
 const maxHistoryEntries = 50;
+const defaultBoardTextStyle: ResolvedBoardTextStyle = {
+  color: "#000000",
+  fontFamily: "inter",
+  fontSize: 16,
+  bold: false,
+  italic: false,
+  align: "left",
+};
 
 @Component({
   selector: "app-board-page",
@@ -125,6 +156,8 @@ export class BoardPage implements OnInit, OnDestroy {
   @ViewChild("canvas") private canvas?: ElementRef<HTMLElement>;
   @ViewChild("commandInput")
   private commandInput?: ElementRef<HTMLInputElement>;
+  @ViewChild("stickerSearchInput")
+  private stickerSearchInput?: ElementRef<HTMLInputElement>;
 
   readonly boardId = this.route.snapshot.paramMap.get("boardId") ?? "";
   readonly isSample = this.boardId === "sample";
@@ -143,8 +176,15 @@ export class BoardPage implements OnInit, OnDestroy {
   readonly saveState = signal("Saved");
   readonly selectedTool = signal<BoardTool>("select");
   readonly shapeKind = signal<BoardShapeKind>("rectangle");
+  readonly activeToolMenu = signal<"sticky" | "shape" | "sticker" | null>(null);
+  readonly noteColor = signal<NoteColor>("cream");
+  readonly stackNotesNext = signal(false);
+  readonly selectedSticker = signal("⭐");
+  readonly stickerSearch = signal("");
+  readonly stickerCategory = signal("All");
   readonly selectedElementId = signal<string | null>(null);
   readonly selectedElementIds = signal<string[]>([]);
+  readonly textFormattingOpen = signal(false);
   readonly editingElementId = signal<string | null>(null);
   readonly drawingPoints = signal<BoardPoint[]>([]);
   readonly lassoPoints = signal<BoardPoint[]>([]);
@@ -218,9 +258,110 @@ export class BoardPage implements OnInit, OnDestroy {
   }[] = [
     { id: "rectangle", label: "Rectangle" },
     { id: "ellipse", label: "Ellipse" },
+    { id: "rhombus", label: "Rhombus" },
+    { id: "triangle", label: "Triangle" },
     { id: "arrow", label: "Arrow" },
+    { id: "elbowArrow", label: "Elbow arrow" },
+    { id: "blockArrow", label: "Block arrow" },
+    { id: "divider", label: "Divider" },
   ];
-  readonly colorOptions: NoteColor[] = ["cream", "rose", "sage", "sky"];
+  readonly colorOptions: NoteColor[] = [
+    "cream",
+    "yellow",
+    "orange",
+    "coral",
+    "rose",
+    "pink",
+    "magenta",
+    "lavender",
+    "sky",
+    "blue",
+    "cyan",
+    "teal",
+    "sage",
+    "green",
+    "lime",
+    "white",
+    "black",
+  ];
+  readonly fontFamilies: { id: BoardFontFamily; label: string }[] = [
+    { id: "inter", label: "Inter" },
+    { id: "vt323", label: "VT323" },
+    { id: "serif", label: "Serif" },
+    { id: "mono", label: "Monospace" },
+  ];
+  readonly fontSizes = [10, 12, 14, 16, 18, 24, 32, 48, 72];
+  readonly textAlignments: { id: BoardTextAlign; label: string }[] = [
+    { id: "left", label: "Left" },
+    { id: "center", label: "Center" },
+    { id: "right", label: "Right" },
+  ];
+  readonly stickerCategories = [
+    "All",
+    "People",
+    "Nature",
+    "Food",
+    "Activities",
+    "Travel",
+    "Objects",
+    "Symbols",
+  ];
+  readonly stickerOptions: StickerOption[] = [
+    { emoji: "👋", label: "Waving hand", category: "People" },
+    { emoji: "😀", label: "Grinning face", category: "People" },
+    { emoji: "😂", label: "Laughing face", category: "People" },
+    { emoji: "🤔", label: "Thinking face", category: "People" },
+    { emoji: "😍", label: "Heart eyes", category: "People" },
+    { emoji: "😎", label: "Sunglasses face", category: "People" },
+    { emoji: "🥳", label: "Party face", category: "People" },
+    { emoji: "🙌", label: "Celebration hands", category: "People" },
+    { emoji: "👏", label: "Clapping hands", category: "People" },
+    { emoji: "💪", label: "Flexed biceps", category: "People" },
+    { emoji: "❤️", label: "Red heart", category: "People" },
+    { emoji: "🌱", label: "Seedling", category: "Nature" },
+    { emoji: "🌳", label: "Tree", category: "Nature" },
+    { emoji: "🌻", label: "Sunflower", category: "Nature" },
+    { emoji: "🍀", label: "Four leaf clover", category: "Nature" },
+    { emoji: "🌈", label: "Rainbow", category: "Nature" },
+    { emoji: "☀️", label: "Sun", category: "Nature" },
+    { emoji: "🌙", label: "Moon", category: "Nature" },
+    { emoji: "🍕", label: "Pizza", category: "Food" },
+    { emoji: "🍓", label: "Strawberry", category: "Food" },
+    { emoji: "🍩", label: "Doughnut", category: "Food" },
+    { emoji: "☕", label: "Coffee", category: "Food" },
+    { emoji: "🍰", label: "Cake", category: "Food" },
+    { emoji: "⚽", label: "Soccer ball", category: "Activities" },
+    { emoji: "🏀", label: "Basketball", category: "Activities" },
+    { emoji: "🎨", label: "Artist palette", category: "Activities" },
+    { emoji: "🎉", label: "Party popper", category: "Activities" },
+    { emoji: "🎵", label: "Musical note", category: "Activities" },
+    { emoji: "🚀", label: "Rocket", category: "Travel" },
+    { emoji: "🚲", label: "Bicycle", category: "Travel" },
+    { emoji: "🏠", label: "House", category: "Travel" },
+    { emoji: "🌍", label: "Globe", category: "Travel" },
+    { emoji: "🏖️", label: "Beach", category: "Travel" },
+    { emoji: "💡", label: "Light bulb", category: "Objects" },
+    { emoji: "📌", label: "Pushpin", category: "Objects" },
+    { emoji: "✏️", label: "Pencil", category: "Objects" },
+    { emoji: "📚", label: "Books", category: "Objects" },
+    { emoji: "💎", label: "Gem", category: "Objects" },
+    { emoji: "🔥", label: "Fire", category: "Objects" },
+    { emoji: "✅", label: "Check mark", category: "Symbols" },
+    { emoji: "❌", label: "Cross mark", category: "Symbols" },
+    { emoji: "⭐", label: "Star", category: "Symbols" },
+    { emoji: "💬", label: "Speech bubble", category: "Symbols" },
+    { emoji: "➕", label: "Plus sign", category: "Symbols" },
+  ];
+  readonly filteredStickerOptions = computed(() => {
+    const query = this.stickerSearch().trim().toLowerCase();
+    const category = this.stickerCategory();
+    return this.stickerOptions.filter(
+      (option) =>
+        (category === "All" || option.category === category) &&
+        (!query ||
+          `${option.label} ${option.emoji}`.toLowerCase().includes(query)),
+    );
+  });
   readonly connectionDirections: {
     id: "up" | "right" | "down" | "left";
   }[] = [{ id: "up" }, { id: "right" }, { id: "down" }, { id: "left" }];
@@ -292,6 +433,11 @@ export class BoardPage implements OnInit, OnDestroy {
         event.preventDefault();
         this.closeCommandPalette();
       }
+      return;
+    }
+    if (event.key === "Escape" && this.activeToolMenu()) {
+      event.preventDefault();
+      this.activeToolMenu.set(null);
       return;
     }
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
@@ -579,10 +725,66 @@ export class BoardPage implements OnInit, OnDestroy {
       this.isSaving()
     )
       return;
+    this.activeToolMenu.set(null);
+    if (tool !== "note") this.stackNotesNext.set(false);
     this.selectedTool.set(tool);
     this.editingElementId.set(null);
     this.contextMenu.set(null);
     if (tool !== "select") this.setSelection([]);
+  }
+
+  onToolButtonClick(tool: BoardTool): void {
+    const menu =
+      tool === "note"
+        ? "sticky"
+        : tool === "shape"
+          ? "shape"
+          : tool === "sticker"
+            ? "sticker"
+            : null;
+    if (menu === null) {
+      this.setTool(tool);
+      return;
+    }
+    if (!this.canEdit() || this.isSaving()) return;
+    const shouldOpen = this.activeToolMenu() !== menu;
+    this.setTool(tool);
+    this.activeToolMenu.set(shouldOpen ? menu : null);
+    if (shouldOpen && menu === "sticker") {
+      this.stickerSearch.set("");
+      this.stickerCategory.set("All");
+      this.setTimeout(() => this.stickerSearchInput?.nativeElement.focus());
+    }
+  }
+
+  chooseNoteColor(color: NoteColor): void {
+    this.noteColor.set(color);
+    this.activeToolMenu.set(null);
+    this.stackNotesNext.set(false);
+  }
+
+  createStickyStack(): void {
+    if (!this.canEdit() || this.isSaving()) return;
+    this.setTool("note");
+    this.stackNotesNext.set(true);
+  }
+
+  chooseSticker(emoji: string): void {
+    this.selectedSticker.set(emoji);
+    this.activeToolMenu.set(null);
+  }
+
+  chooseShape(shape: BoardShapeKind): void {
+    this.setShapeKind(shape);
+    this.setTool("shape");
+  }
+
+  @HostListener("document:click", ["$event"])
+  closeToolMenuOutside(event: MouseEvent): void {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target?.closest(".tool-rail, .tool-popover")) {
+      this.activeToolMenu.set(null);
+    }
   }
 
   setInputMode(event: Event): void {
@@ -604,6 +806,105 @@ export class BoardPage implements OnInit, OnDestroy {
     const selection = [...new Set(ids)].filter((id) => validIds.has(id));
     this.selectedElementIds.set(selection);
     this.selectedElementId.set(selection[0] ?? null);
+    this.textFormattingOpen.set(false);
+  }
+
+  hasTextSelection(): boolean {
+    return this.selectedElements().some((element) =>
+      this.supportsTextStyle(element),
+    );
+  }
+
+  selectedTextStyle(): ResolvedBoardTextStyle {
+    const element = this.selectedElements().find((item) =>
+      this.supportsTextStyle(item),
+    );
+    return element ? this.textStyleFor(element) : defaultBoardTextStyle;
+  }
+
+  textStyleFor(element: BoardElement): ResolvedBoardTextStyle {
+    return this.supportsTextStyle(element)
+      ? { ...defaultBoardTextStyle, ...element.textStyle }
+      : defaultBoardTextStyle;
+  }
+
+  fontFamilyCss(fontFamily: BoardFontFamily): string {
+    return {
+      inter: '"Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+      vt323: '"VT323", monospace',
+      serif: 'Georgia, "Times New Roman", serif',
+      mono: '"Courier New", monospace',
+    }[fontFamily];
+  }
+
+  toggleTextFormatting(): void {
+    if (!this.isSaving()) {
+      this.textFormattingOpen.update((open) => !open);
+    }
+  }
+
+  changeTextColor(event: Event): void {
+    const color = (event.currentTarget as HTMLInputElement).value;
+    if (/^#[0-9a-f]{6}$/i.test(color)) {
+      this.applyTextStyle({ color });
+    }
+  }
+
+  changeFontFamily(event: Event): void {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    if (this.fontFamilies.some((family) => family.id === value)) {
+      this.applyTextStyle({ fontFamily: value as BoardFontFamily });
+    }
+  }
+
+  changeFontSize(event: Event): void {
+    const fontSize = Number((event.currentTarget as HTMLSelectElement).value);
+    if (this.fontSizes.includes(fontSize)) {
+      this.applyTextStyle({ fontSize });
+    }
+  }
+
+  applyTextAlignment(align: BoardTextAlign): void {
+    this.applyTextStyle({ align });
+  }
+
+  toggleTextEmphasis(style: "bold" | "italic"): void {
+    this.applyTextStyle({ [style]: !this.selectedTextStyle()[style] });
+  }
+
+  private applyTextStyle(changes: BoardTextStyle): void {
+    if (!this.canEdit() || this.isSaving()) return;
+    const board = this.board();
+    if (!board) return;
+    const selectedIds = new Set(
+      this.selectedElements()
+        .filter((element) => !element.locked && this.supportsTextStyle(element))
+        .map((element) => element.id),
+    );
+    if (!selectedIds.size) return;
+    const before = this.cloneElements(board.elements);
+    const elements = board.elements.map((element) =>
+      selectedIds.has(element.id) && this.supportsTextStyle(element)
+        ? {
+            ...element,
+            textStyle: { ...this.textStyleFor(element), ...changes },
+          }
+        : element,
+    );
+    this.saveElements(elements, before);
+  }
+
+  private supportsTextStyle(
+    element: BoardElement,
+  ): element is BoardTextElement {
+    return (
+      element.type === "note" ||
+      element.type === "text" ||
+      element.type === "card" ||
+      element.type === "shape" ||
+      element.type === "comment" ||
+      element.type === "frame"
+    );
   }
 
   onElementClick(element: BoardElement, event: MouseEvent): void {
@@ -673,7 +974,10 @@ export class BoardPage implements OnInit, OnDestroy {
       x + 10 <= 100 ? x : note.x,
       x + 10 <= 100 ? note.y : Math.min(y, 85),
     );
-    this.addElements([next], "note");
+    this.addElements(
+      [next.type === "note" ? { ...next, color: note.color } : next],
+      "note",
+    );
   }
 
   createConnectedElement(
@@ -1657,6 +1961,33 @@ export class BoardPage implements OnInit, OnDestroy {
     const created = dragged
       ? this.resizeCreatedElement(element, gesture.start, gesture.current)
       : element;
+    if (
+      gesture.tool === "note" &&
+      this.stackNotesNext() &&
+      created.type === "note"
+    ) {
+      this.stackNotesNext.set(false);
+      this.addElements(
+        [
+          {
+            ...created,
+            id: crypto.randomUUID(),
+            x: this.clampCoordinate(created.x + 1.5),
+            y: this.clampCoordinate(created.y + 1.5),
+          },
+          {
+            ...created,
+            id: crypto.randomUUID(),
+            x: this.clampCoordinate(created.x + 0.75),
+            y: this.clampCoordinate(created.y + 0.75),
+          },
+          created,
+        ],
+        gesture.tool,
+        created.id,
+      );
+      return;
+    }
     this.addElements([created], gesture.tool);
   }
 
@@ -1688,21 +2019,33 @@ export class BoardPage implements OnInit, OnDestroy {
     }
   }
 
-  private addElements(elements: BoardElement[], tool: BoardTool): void {
+  private addElements(
+    elements: BoardElement[],
+    tool: BoardTool,
+    focusElementId?: string,
+  ): void {
     const board = this.board();
     if (!board) return;
+    if (board.elements.length + elements.length > 500) {
+      this.errorMessage.set("This board can hold at most 500 items.");
+      return;
+    }
     this.saveElements(
       [...board.elements, ...elements],
       this.cloneElements(board.elements),
     );
     this.setSelection(elements.map((element) => element.id));
-    const editableElement = elements.find(
-      (element) =>
-        element.type === "note" ||
-        element.type === "text" ||
-        element.type === "card" ||
-        element.type === "comment",
-    );
+    const editableElement =
+      (focusElementId
+        ? elements.find((element) => element.id === focusElementId)
+        : undefined) ??
+      elements.find(
+        (element) =>
+          element.type === "note" ||
+          element.type === "text" ||
+          element.type === "card" ||
+          element.type === "comment",
+      );
     if (editableElement) this.focusEditableElement(editableElement.id);
     if (!["comment", "pen", "eraser", "lasso", "hand"].includes(tool)) {
       this.selectedTool.set("select");
@@ -2185,11 +2528,64 @@ export class BoardPage implements OnInit, OnDestroy {
 
   colorValue(color: NoteColor): string {
     return {
-      cream: "#d5a928",
+      cream: "#b58b18",
+      yellow: "#c5a000",
+      orange: "#c96917",
+      coral: "#c84f3b",
       rose: "#c75d71",
-      sage: "#548a5e",
+      pink: "#d74385",
+      magenta: "#b52d91",
+      lavender: "#8f57b0",
       sky: "#4b82b8",
+      blue: "#315faf",
+      cyan: "#188caa",
+      teal: "#168a83",
+      sage: "#548a5e",
+      green: "#388349",
+      lime: "#709b27",
+      white: "#84909a",
+      black: "#28282a",
     }[color];
+  }
+
+  colorFillValue(color: NoteColor): string {
+    return {
+      cream: "#fff1b8",
+      yellow: "#ffe66a",
+      orange: "#ffb66b",
+      coral: "#ff8176",
+      rose: "#f8dfe3",
+      pink: "#ffb8e4",
+      magenta: "#ee8adc",
+      lavender: "#d4c2ff",
+      sky: "#b5d5ff",
+      blue: "#87aafa",
+      cyan: "#91e5f4",
+      teal: "#85ded0",
+      sage: "#dcefdc",
+      green: "#80dc8d",
+      lime: "#b9e36a",
+      white: "#f4f4f4",
+      black: "#272727",
+    }[color];
+  }
+
+  colorLabel(color: NoteColor): string {
+    return color[0].toUpperCase() + color.slice(1);
+  }
+
+  shapeLabel(shape: BoardShapeKind): string {
+    return (
+      this.shapeKinds.find((option) => option.id === shape)?.label ?? "Shape"
+    );
+  }
+
+  itemColorValue(element: BoardElement): string | null {
+    return "color" in element ? this.colorValue(element.color) : null;
+  }
+
+  itemFillValue(element: BoardElement): string | null {
+    return "color" in element ? this.colorFillValue(element.color) : null;
   }
 
   strokePointString(stroke: Extract<BoardElement, { type: "stroke" }>): string {
@@ -2273,7 +2669,7 @@ export class BoardPage implements OnInit, OnDestroy {
         );
       case "shape":
         return (
-          typeof element["shape"] === "string" &&
+          this.isBoardShapeKind(element["shape"]) &&
           typeof element["width"] === "number" &&
           typeof element["height"] === "number" &&
           this.isNoteColor(element["color"])
@@ -2313,12 +2709,11 @@ export class BoardPage implements OnInit, OnDestroy {
   }
 
   private isNoteColor(value: unknown): value is NoteColor {
-    return (
-      value === "rose" ||
-      value === "cream" ||
-      value === "sage" ||
-      value === "sky"
-    );
+    return this.colorOptions.some((color) => color === value);
+  }
+
+  private isBoardShapeKind(value: unknown): value is BoardShapeKind {
+    return this.shapeKinds.some((shape) => shape.id === value);
   }
 
   private pasteElements(source: BoardElement[]): void {
@@ -2523,7 +2918,7 @@ export class BoardPage implements OnInit, OnDestroy {
         x,
         y,
         text: "",
-        color: "cream",
+        color: this.noteColor(),
         width: 10,
         height: 15,
       },
@@ -2551,11 +2946,11 @@ export class BoardPage implements OnInit, OnDestroy {
         y,
         shape: this.shapeKind(),
         width: 12,
-        height: 10,
+        height: this.shapeKind() === "divider" ? 0.5 : 10,
         color: "sky",
       },
       frame: { type: "frame", x, y, title: "Frame", width: 40, height: 33.75 },
-      sticker: { type: "sticker", x, y, emoji: "⭐" },
+      sticker: { type: "sticker", x, y, emoji: this.selectedSticker() },
       comment: { type: "comment", x, y, text: "Add a comment…" },
     };
     const element = elements[tool];

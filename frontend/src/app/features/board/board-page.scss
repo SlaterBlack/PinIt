@@ -1,25 +1,36 @@
 .board-page {
-  width: min(100%, 1500px);
+  width: 100%;
   display: flex;
-  min-height: calc(100vh - 72px);
+  height: max(0px, calc(100dvh - 72px));
+  min-height: 0;
   flex-direction: column;
-  gap: var(--space-md);
-  margin: 0 auto;
-  padding: clamp(var(--space-md), 3vw, 2rem);
+  gap: 0;
+  margin: 0;
+  overflow: hidden;
 }
 
 .board-header {
   display: flex;
-  min-height: 52px;
+  min-height: 50px;
+  flex: 0 0 50px;
   align-items: center;
-  gap: var(--space-md);
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
 .back-link {
   display: inline-flex;
+  min-height: 34px;
   align-items: center;
   gap: var(--space-xs);
+  padding: 0 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: var(--color-text-muted);
+  white-space: nowrap;
   font-weight: 600;
   text-decoration: none;
 
@@ -30,9 +41,15 @@
 
 .board-title-wrap {
   display: flex;
+  min-height: 34px;
   align-items: center;
   gap: var(--space-sm);
   margin-right: auto;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  white-space: nowrap;
 
   h1 {
     margin: 0;
@@ -43,7 +60,7 @@
 }
 
 .board-title-input {
-  width: min(52vw, 460px);
+  width: min(36vw, 420px);
   min-width: 120px;
   padding: 0.25rem 0.4rem;
   border: 1px solid transparent;
@@ -77,19 +94,31 @@
 
 .save-state {
   display: inline-flex;
+  min-height: 34px;
   align-items: center;
   gap: var(--space-xs);
+  padding: 0 9px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: var(--color-text-muted);
   font-size: 0.8rem;
   text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .input-mode {
   display: inline-flex;
+  min-height: 34px;
   align-items: center;
   gap: var(--space-xs);
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: var(--color-text-muted);
   font-size: 0.75rem;
+  white-space: nowrap;
 
   select {
     padding: 0.35rem 0.5rem;
@@ -101,29 +130,24 @@
   }
 }
 
-.board-error {
-  margin: 0;
-  color: var(--color-danger, #a23b45);
-  font-size: 0.875rem;
-}
-
 .board-loading {
   display: grid;
-  min-height: 480px;
+  min-height: 0;
+  flex: 1;
   place-items: center;
   color: var(--color-text-muted);
 }
 
 .board-workspace {
   display: grid;
-  min-height: 560px;
-  flex: 1;
+  min-height: 0;
+  flex: 1 1 0;
   grid-template-columns: 76px minmax(0, 1fr);
   overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 0;
+  border-radius: 0;
   background: var(--color-surface);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .tool-rail {
@@ -209,7 +233,7 @@
 .board-canvas {
   position: relative;
   min-width: 0;
-  min-height: 560px;
+  min-height: 0;
   overflow: hidden;
   background-color: #f7f8fa;
   background-image: radial-gradient(rgb(91 102 116 / 18%) 1px, transparent 1px);
@@ -291,9 +315,9 @@
   padding: 12px;
   border: 1px solid rgb(45 55 65 / 14%);
   border-radius: 6px;
-  background: var(--color-surface);
+  background: #fff;
   box-shadow: 0 2px 5px rgb(34 35 48 / 9%);
-  color: var(--color-text);
+  color: #000;
   cursor: grab;
   touch-action: none;
 
@@ -325,12 +349,11 @@
     min-height: 54px;
     flex: 1;
     resize: none;
-    font-size: 0.88rem;
     line-height: 1.4;
     white-space: pre-wrap;
 
     &::placeholder {
-      color: var(--color-text-muted);
+      color: rgb(0 0 0 / 45%);
     }
 
     &[readonly] {
@@ -344,27 +367,8 @@
   padding: 38px 18px 18px;
   border-color: rgb(45 55 65 / 10%);
   border-radius: 5px;
+  background: var(--item-fill);
   box-shadow: 0 2px 5px rgb(34 35 48 / 8%);
-
-  textarea {
-    font-size: 0.95rem;
-  }
-}
-
-.item-rose {
-  background: color-mix(in srgb, #f8dfe3 78%, var(--color-surface));
-}
-
-.item-cream {
-  background: color-mix(in srgb, #fff1b8 82%, var(--color-surface));
-}
-
-.item-sage {
-  background: color-mix(in srgb, #dcefdc 82%, var(--color-surface));
-}
-
-.item-sky {
-  background: color-mix(in srgb, #dcecfb 82%, var(--color-surface));
 }
 
 .item-drag-handle {
@@ -448,7 +452,6 @@
 
   textarea {
     min-height: 50px;
-    font-size: 1.1rem;
   }
 }
 
@@ -458,20 +461,19 @@
 
 .card-item {
   gap: 8px;
-  background: var(--color-surface);
+  background: #fff;
 }
 
 .item-title {
   flex: 0 0 auto;
-  font-weight: 700 !important;
+  font-weight: 700;
 }
 
 .shape-item {
   align-items: center;
   justify-content: center;
-  border: 2px solid
-    color-mix(in srgb, var(--color-primary-dark) 65%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  border: 2px solid var(--item-color);
+  background: var(--item-fill);
   box-shadow: none;
 
   &.shape-ellipse {
@@ -492,7 +494,7 @@
 }
 
 .shape-label {
-  color: var(--color-text-muted);
+  color: #4b5563;
   font-size: 0.8rem;
   text-transform: capitalize;
 }
@@ -548,7 +550,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  border-color: color-mix(in srgb, #eab14d 45%, var(--color-border));
+  border-color: #eab14d;
   border-radius: 50%;
   background: #fff1c9;
   box-shadow: 0 2px 6px rgb(34 35 48 / 18%);
@@ -562,9 +564,9 @@
   width: 220px !important;
   height: 150px;
   padding: 12px;
-  border: 1px solid color-mix(in srgb, #eab14d 45%, var(--color-border)) !important;
+  border: 1px solid #eab14d !important;
   border-radius: 12px 12px 12px 3px;
-  background: color-mix(in srgb, #fff1c9 62%, var(--color-surface)) !important;
+  background: #fff1c9 !important;
   box-shadow: 0 5px 16px rgb(34 35 48 / 18%);
 }
 
@@ -584,14 +586,13 @@
 .frame-item {
   z-index: 0;
   padding: 12px;
-  border: 2px solid
-    color-mix(in srgb, var(--color-primary-dark) 35%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+  border: 2px solid rgb(41 86 136 / 65%);
+  background: rgb(230 240 250 / 42%);
   box-shadow: none;
 
   .item-title {
     padding: 4px;
-    background: var(--color-surface);
+    background: #fff;
   }
 }
 
@@ -694,6 +695,10 @@
   top: 12px;
   left: 50%;
   display: flex;
+  max-width: calc(100vw - 32px);
+  max-height: min(45vh, 360px);
+  flex-wrap: wrap;
+  overflow: auto;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
@@ -724,25 +729,41 @@
   border-radius: 50% !important;
 }
 
-.swatch-cream {
-  background: #fff1b8 !important;
-}
-
-.swatch-rose {
-  background: #f8dfe3 !important;
-}
-
-.swatch-sage {
-  background: #dcefdc !important;
-}
-
-.swatch-sky {
-  background: #dcecfb !important;
-}
-
 .toolbar-delete {
   padding: 0 8px;
   color: var(--color-danger, #a23b45);
+}
+
+.text-format-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  input,
+  select {
+    color: var(--color-text);
+  }
+
+  input[type="color"] {
+    width: 34px;
+    padding: 2px;
+  }
+
+  select {
+    max-width: 96px;
+  }
+
+  button.is-active {
+    border-color: var(--color-accent);
+    background: var(--color-primary);
+    color: var(--color-contrast);
+  }
 }
 
 .board-context-menu {
@@ -888,25 +909,29 @@
 
 @media (max-width: 700px) {
   .board-page {
-    min-height: calc(100vh - 130px);
+    height: max(0px, calc(100dvh - 106px));
   }
 
   .board-header {
-    flex-wrap: wrap;
-    gap: var(--space-sm);
+    min-height: 48px;
+    flex-basis: 48px;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 4px 6px;
   }
 
   .save-state {
-    flex-basis: 100%;
-    padding-left: 3.5rem;
+    font-size: 0.68rem;
   }
 
   .board-title-input {
-    width: min(60vw, 420px);
+    width: min(32vw, 180px);
+    min-width: 90px;
+    font-size: 0.9rem;
   }
 
   .board-workspace {
-    min-height: 480px;
+    min-height: 0;
     grid-template-columns: 52px minmax(0, 1fr);
   }
 
@@ -916,11 +941,7 @@
   }
 
   .board-canvas {
-    min-height: 480px;
-  }
-
-  .note-item {
-    min-height: 200px;
+    min-height: 0;
   }
 
   .item-drag-handle {

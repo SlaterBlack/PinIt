@@ -3,7 +3,10 @@ import { Injectable, inject } from "@angular/core";
 import { Observable } from "rxjs";
 import {
   Board,
+  BoardElement,
+  BoardElementChanges,
   BoardGrant,
+  NewBoardElement,
   BoardNote,
   BoardSummary,
 } from "../models/board.model";
@@ -50,6 +53,47 @@ export class Boards {
     return this.http.post<{ board: Board; element: BoardNote }>(
       `${this.apiUrl}/boards/${encodeURIComponent(id)}/elements`,
       { text },
+    );
+  }
+
+  addElement(
+    id: string,
+    element: NewBoardElement,
+  ): Observable<{ board: Board; element: BoardElement }> {
+    return this.http.post<{ board: Board; element: BoardElement }>(
+      `${this.apiUrl}/boards/${encodeURIComponent(id)}/elements`,
+      element,
+    );
+  }
+
+  updateElement(
+    boardId: string,
+    elementId: string,
+    changes: BoardElementChanges,
+  ): Observable<{ board: Board }> {
+    return this.http.patch<{ board: Board }>(
+      `${this.apiUrl}/boards/${encodeURIComponent(boardId)}/elements/${encodeURIComponent(elementId)}`,
+      changes,
+    );
+  }
+
+  removeElement(
+    boardId: string,
+    elementId: string,
+  ): Observable<{ board: Board }> {
+    return this.http.delete<{ board: Board }>(
+      `${this.apiUrl}/boards/${encodeURIComponent(boardId)}/elements/${encodeURIComponent(elementId)}`,
+    );
+  }
+
+  replaceElements(
+    boardId: string,
+    elements: BoardElement[],
+    expectedUpdatedAt: string,
+  ): Observable<{ board: Board }> {
+    return this.http.put<{ board: Board }>(
+      `${this.apiUrl}/boards/${encodeURIComponent(boardId)}/elements`,
+      { elements, expectedUpdatedAt },
     );
   }
 

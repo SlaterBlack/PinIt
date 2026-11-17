@@ -13,7 +13,7 @@ export class BoardLive {
 
   connect(
     boardId: string,
-    onUpdate: () => void,
+    onUpdate: (updatedAt?: string) => void,
     onAccessDenied: () => void,
   ): () => void {
     let disposed = false;
@@ -68,7 +68,11 @@ export class BoardLive {
               attempt = 0;
               this.statusSignal.set("live");
             } else if (message.type === "board-updated") {
-              onUpdate();
+              const updatedAt =
+                "updatedAt" in message && typeof message.updatedAt === "string"
+                  ? message.updatedAt
+                  : undefined;
+              onUpdate(updatedAt);
             } else if (message.type === "access-denied") {
               onAccessDenied();
               socket?.close(1008, "Board access revoked");

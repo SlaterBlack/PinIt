@@ -18,6 +18,8 @@ export interface BoardNote extends BoardElementBase {
   type: "note";
   text: string;
   color: NoteColor;
+  width?: number;
+  height?: number;
 }
 
 export interface BoardText extends BoardElementBase {
@@ -25,6 +27,8 @@ export interface BoardText extends BoardElementBase {
   text: string;
   color: NoteColor;
   width: number;
+  height?: number;
+  autoWidth?: boolean;
 }
 
 export interface BoardCard extends BoardElementBase {
@@ -41,6 +45,7 @@ export interface BoardShape extends BoardElementBase {
   width: number;
   height: number;
   color: NoteColor;
+  text?: string;
 }
 
 export interface BoardStroke extends BoardElementBase {
@@ -48,6 +53,16 @@ export interface BoardStroke extends BoardElementBase {
   width: number;
   height: number;
   points: BoardPoint[];
+  color: NoteColor;
+  strokeWidth: number;
+}
+
+export interface BoardLine extends BoardElementBase {
+  type: "line";
+  endX: number;
+  endY: number;
+  startElementId: string | null;
+  endElementId: string | null;
   color: NoteColor;
   strokeWidth: number;
 }
@@ -75,6 +90,7 @@ export type BoardElement =
   | BoardCard
   | BoardShape
   | BoardStroke
+  | BoardLine
   | BoardSticker
   | BoardComment
   | BoardFrame;
@@ -97,6 +113,11 @@ export interface BoardElementChanges {
   points?: BoardPoint[];
   strokeWidth?: number;
   emoji?: string;
+  endX?: number;
+  endY?: number;
+  startElementId?: string | null;
+  endElementId?: string | null;
+  autoWidth?: boolean;
 }
 
 export interface Board {

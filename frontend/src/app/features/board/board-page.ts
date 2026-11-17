@@ -4,6 +4,7 @@ import { HttpErrorResponse } from "@angular/common/http";
 import {
   Component,
   ElementRef,
+  HostListener,
   OnDestroy,
   OnInit,
   ViewChild,
@@ -16,6 +17,7 @@ import { ActivatedRoute, Router, RouterLink } from "@angular/router";
 import {
   Board,
   BoardElement,
+  NoteColor,
   BoardPermission,
   BoardPoint,
   BoardShapeKind,
@@ -26,14 +28,21 @@ import { Boards } from "../../core/services/boards";
 
 type BoardTool =
   | "select"
+  | "hand"
   | "note"
   | "text"
   | "card"
   | "shape"
+  | "line"
   | "frame"
-  | "draw"
+  | "pen"
+  | "eraser"
+  | "lasso"
   | "sticker"
   | "comment";
+
+type PlacementTool =
+  "note" | "text" | "card" | "shape" | "frame" | "sticker" | "comment";
 
 interface ElementHistory {
   before: BoardElement[];
@@ -41,19 +50,37 @@ interface ElementHistory {
 }
 
 interface ElementDrag {
-  id: string;
+  ids: string[];
   pointerId: number;
   clientX: number;
   clientY: number;
-  x: number;
-  y: number;
   before: BoardElement[];
 }
 
 interface CanvasPan {
   pointerId: number;
+  button: number;
   clientX: number;
   clientY: number;
+  startX: number;
+  startY: number;
+  targetId: string | null;
+  moved: boolean;
+}
+
+interface PointerGesture {
+  pointerId: number;
+  tool: BoardTool;
+  start: BoardPoint;
+  current: BoardPoint;
+  startElementId?: string;
+  points?: BoardPoint[];
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  targetId: string | null;
 }
 
 const sceneWidth = 2400;
@@ -88,9 +115,30 @@ export class BoardPage implements OnInit, OnDestroy {
   readonly selectedTool = signal<BoardTool>("select");
   readonly shapeKind = signal<BoardShapeKind>("rectangle");
   readonly selectedElementId = signal<string | null>(null);
+  readonly selectedElementIds = signal<string[]>([]);
+  readonly editingElementId = signal<string | null>(null);
   readonly drawingPoints = signal<BoardPoint[]>([]);
+  readonly lassoPoints = signal<BoardPoint[]>([]);
+  readonly selectionRectangle = signal<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  readonly creationRectangle = signal<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  readonly linePreview = signal<{ start: BoardPoint; end: BoardPoint } | null>(
+    null,
+  );
+  readonly contextMenu = signal<ContextMenuState | null>(null);
   readonly canvasPanning = signal(false);
   readonly draggingElementId = signal<string | null>(null);
+  readonly inputMode = signal<"mouse" | "trackpad">("mouse");
+  readonly spaceHandActive = signal(false);
   readonly undoDepth = signal(0);
   readonly redoDepth = signal(0);
   readonly viewport = signal({ x: 0, y: 0, zoom: 1 });
@@ -111,15 +159,19 @@ export class BoardPage implements OnInit, OnDestroy {
       : (this.board()?.title ?? "Loading board…"),
   );
   readonly tools: { id: BoardTool; label: string; icon: string }[] = [
-    { id: "select", label: "Select", icon: "↖" },
-    { id: "note", label: "Sticky note", icon: "▤" },
-    { id: "text", label: "Text", icon: "T" },
+    { id: "select", label: "Select (V)", icon: "↖" },
+    { id: "hand", label: "Hand (H)", icon: "✋" },
+    { id: "note", label: "Sticky note (N)", icon: "▤" },
+    { id: "text", label: "Text (T)", icon: "T" },
+    { id: "shape", label: "Shapes (S)", icon: "◇" },
     { id: "card", label: "Card", icon: "▱" },
-    { id: "shape", label: "Shape", icon: "◇" },
-    { id: "frame", label: "Frame", icon: "▣" },
-    { id: "draw", label: "Draw", icon: "／" },
+    { id: "line", label: "Connection line (L)", icon: "↗" },
+    { id: "pen", label: "Pen (P)", icon: "／" },
+    { id: "eraser", label: "Eraser (E)", icon: "⌫" },
+    { id: "lasso", label: "Lasso (Q)", icon: "◯" },
+    { id: "frame", label: "Frame (F)", icon: "▣" },
+    { id: "comment", label: "Comment (C)", icon: "▢" },
     { id: "sticker", label: "Sticker", icon: "★" },
-    { id: "comment", label: "Comment", icon: "▢" },
   ];
   readonly shapeKinds: {
     id: BoardShapeKind;
@@ -130,6 +182,7 @@ export class BoardPage implements OnInit, OnDestroy {
     { id: "ellipse", label: "Ellipse", icon: "◯" },
     { id: "arrow", label: "Arrow", icon: "➜" },
   ];
+  readonly colorOptions: NoteColor[] = ["cream", "rose", "sage", "sky"];
 
   private stopLive: (() => void) | null = null;
   private hasLocalEdit = false;
@@ -137,6 +190,11 @@ export class BoardPage implements OnInit, OnDestroy {
   private elementDrag: ElementDrag | undefined;
   private canvasPan: CanvasPan | undefined;
   private drawingPointerId: number | undefined;
+  private gesture: PointerGesture | undefined;
+  private eraseBefore: BoardElement[] | undefined;
+  private suppressNextClick = false;
+  private pendingElementClickId: string | undefined;
+  private spaceDown = false;
   private textEditBefore: BoardElement[] | undefined;
   private readonly undoStack: ElementHistory[] = [];
   private readonly redoStack: ElementHistory[] = [];
@@ -151,6 +209,61 @@ export class BoardPage implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopLive?.();
+  }
+
+  @HostListener("document:keydown", ["$event"])
+  onDocumentKeyDown(event: KeyboardEvent): void {
+    const target = event.target;
+    const editingField =
+      target instanceof HTMLElement &&
+      !!target.closest("input, textarea, [contenteditable='true']");
+    const focusedControl =
+      target instanceof HTMLElement &&
+      !!target.closest("button, select, [role='button']");
+    if (event.code === "Space" && !editingField && !focusedControl) {
+      event.preventDefault();
+      this.spaceDown = true;
+      this.spaceHandActive.set(true);
+      return;
+    }
+    if (editingField || event.altKey || event.ctrlKey || event.metaKey) return;
+    const shortcuts: Record<string, BoardTool> = {
+      v: "select",
+      h: "hand",
+      n: "note",
+      t: "text",
+      s: "shape",
+      l: "line",
+      p: "pen",
+      e: "eraser",
+      q: "lasso",
+      f: "frame",
+      c: "comment",
+    };
+    const shortcut = shortcuts[event.key.toLowerCase()];
+    if (shortcut) {
+      event.preventDefault();
+      this.setTool(shortcut);
+    } else if (event.key === "Escape") {
+      this.cancelGesture();
+      this.setTool("select");
+      this.editingElementId.set(null);
+      this.contextMenu.set(null);
+    }
+  }
+
+  @HostListener("document:keyup", ["$event"])
+  onDocumentKeyUp(event: KeyboardEvent): void {
+    if (event.code === "Space" && this.spaceDown) {
+      this.spaceDown = false;
+      this.spaceHandActive.set(false);
+    }
+  }
+
+  @HostListener("window:blur")
+  onWindowBlur(): void {
+    this.spaceDown = false;
+    this.spaceHandActive.set(false);
   }
 
   loadBoard(connectLive = false): void {
@@ -247,19 +360,151 @@ export class BoardPage implements OnInit, OnDestroy {
   }
 
   setTool(tool: BoardTool): void {
-    if (!this.canEdit() || this.isSaving()) return;
+    if (
+      (!this.canEdit() && tool !== "select" && tool !== "hand") ||
+      this.isSaving()
+    )
+      return;
     this.selectedTool.set(tool);
-    this.selectedElementId.set(null);
+    this.editingElementId.set(null);
+    this.contextMenu.set(null);
+    if (tool !== "select") this.setSelection([]);
+  }
+
+  setInputMode(event: Event): void {
+    const value = (event.currentTarget as HTMLSelectElement).value;
+    if (value === "mouse" || value === "trackpad") {
+      this.inputMode.set(value);
+    }
   }
 
   setShapeKind(shape: BoardShapeKind): void {
     this.shapeKind.set(shape);
   }
 
+  setSelection(ids: string[]): void {
+    const board = this.board();
+    const validIds = new Set(
+      board?.elements.map((element) => element.id) ?? [],
+    );
+    const selection = [...new Set(ids)].filter((id) => validIds.has(id));
+    this.selectedElementIds.set(selection);
+    this.selectedElementId.set(selection[0] ?? null);
+  }
+
+  onElementClick(element: BoardElement, event: MouseEvent): void {
+    event.stopPropagation();
+    if (this.pendingElementClickId === element.id) {
+      this.pendingElementClickId = undefined;
+      return;
+    }
+    if (this.selectedTool() !== "select") return;
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      const selected = this.selectedElementIds();
+      this.setSelection(
+        selected.includes(element.id)
+          ? selected.filter((id) => id !== element.id)
+          : [...selected, element.id],
+      );
+    } else {
+      this.setSelection([element.id]);
+    }
+  }
+
+  onElementDoubleClick(element: BoardElement, event: MouseEvent): void {
+    event.stopPropagation();
+    if (
+      !this.canEdit() ||
+      this.isSaving() ||
+      this.selectedTool() !== "select"
+    ) {
+      return;
+    }
+    if (
+      element.type === "note" ||
+      element.type === "text" ||
+      element.type === "card" ||
+      element.type === "comment" ||
+      element.type === "frame" ||
+      element.type === "shape"
+    ) {
+      this.setSelection([element.id]);
+      this.focusEditableElement(element.id);
+    }
+  }
+
+  onToolDragStart(event: DragEvent, tool: BoardTool): void {
+    event.dataTransfer?.setData("application/x-pinit-tool", tool);
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = "copy";
+  }
+
+  onCanvasDrop(event: DragEvent): void {
+    event.preventDefault();
+    if (!this.canEdit() || this.isSaving()) return;
+    const tool = event.dataTransfer?.getData(
+      "application/x-pinit-tool",
+    ) as BoardTool;
+    if (!this.isCreationTool(tool)) return;
+    const point = this.pointerToBoardPoint(event.clientX, event.clientY);
+    this.finishCreationGesture({
+      pointerId: -1,
+      tool,
+      start: point,
+      current: point,
+    });
+  }
+
+  applySelectedColor(color: NoteColor): void {
+    const board = this.board();
+    if (!board || !this.canEdit() || this.isSaving()) return;
+    const ids = new Set(this.selectedElementIds());
+    const before = this.cloneElements(board.elements);
+    const elements = board.elements.map((element) =>
+      ids.has(element.id) && "color" in element
+        ? { ...element, color }
+        : element,
+    );
+    this.saveElements(elements, before);
+  }
+
+  contextDelete(): void {
+    const targetId = this.contextMenu()?.targetId;
+    this.contextMenu.set(null);
+    if (targetId) this.removeElement(targetId);
+  }
+
+  resetView(): void {
+    this.viewport.set({ x: 0, y: 0, zoom: 1 });
+    this.contextMenu.set(null);
+  }
+
+  deleteSelection(): void {
+    if (!this.canEdit() || this.isSaving()) return;
+    const board = this.board();
+    if (!board) return;
+    const selected = new Set(this.selectedElementIds());
+    const elements = this.removeElements(board.elements, selected);
+    if (elements.length === board.elements.length) return;
+    this.setSelection([]);
+    this.saveElements(elements, this.cloneElements(board.elements));
+  }
+
   zoomCanvas(event: WheelEvent): void {
     event.preventDefault();
     const canvas = this.canvas?.nativeElement;
     if (!canvas) return;
+    if (
+      (this.inputMode() === "trackpad" && !event.ctrlKey && !event.metaKey) ||
+      (event.shiftKey && !event.ctrlKey && !event.metaKey)
+    ) {
+      const view = this.viewport();
+      this.viewport.set({
+        ...view,
+        x: view.x - event.deltaX,
+        y: view.y - event.deltaY,
+      });
+      return;
+    }
     const bounds = canvas.getBoundingClientRect();
     const pointerX = event.clientX - bounds.left - bounds.width / 2;
     const pointerY = event.clientY - bounds.top - bounds.height / 2;
@@ -278,38 +523,86 @@ export class BoardPage implements OnInit, OnDestroy {
   }
 
   onCanvasPointerDown(event: PointerEvent): void {
-    if (event.button === 2) {
+    this.contextMenu.set(null);
+    if (
+      event.button === 2 ||
+      event.button === 1 ||
+      (event.button === 0 &&
+        (this.spaceHandActive() || this.selectedTool() === "hand"))
+    ) {
       event.preventDefault();
       this.canvasPan = {
         pointerId: event.pointerId,
+        button: event.button,
         clientX: event.clientX,
         clientY: event.clientY,
+        startX: event.clientX,
+        startY: event.clientY,
+        targetId: this.elementIdAtPoint(event.clientX, event.clientY),
+        moved: false,
       };
       this.canvasPanning.set(true);
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
       return;
     }
-    if (
-      event.button !== 0 ||
-      this.selectedTool() !== "draw" ||
-      !this.canEdit() ||
-      this.isSaving()
-    ) {
-      return;
-    }
+    if (event.button !== 0 || !this.canEdit() || this.isSaving()) return;
+    const tool = this.selectedTool();
+    const point = this.pointerToBoardPoint(event.clientX, event.clientY);
     event.preventDefault();
-    this.beginLocalEdit();
-    this.drawingPointerId = event.pointerId;
-    this.drawingPoints.set([
-      this.pointerToBoardPoint(event.clientX, event.clientY),
-    ]);
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    if (tool === "pen") {
+      this.beginLocalEdit();
+      this.drawingPointerId = event.pointerId;
+      this.drawingPoints.set([point]);
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } else if (tool === "select" || tool === "lasso") {
+      this.gesture = {
+        pointerId: event.pointerId,
+        tool,
+        start: point,
+        current: point,
+        ...(tool === "lasso" ? { points: [point] } : {}),
+      };
+      if (tool === "lasso") {
+        this.lassoPoints.set([point]);
+      } else {
+        this.selectionRectangle.set({
+          x: point.x,
+          y: point.y,
+          width: 0,
+          height: 0,
+        });
+      }
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    } else if (tool === "eraser") {
+      this.beginEraserGesture(event, point);
+    } else if (tool === "line") {
+      this.beginLineGesture(
+        event,
+        point,
+        this.elementIdAtPoint(event.clientX, event.clientY) ?? undefined,
+      );
+    } else if (this.isCreationTool(tool)) {
+      this.gesture = {
+        pointerId: event.pointerId,
+        tool,
+        start: point,
+        current: point,
+      };
+      this.updateCreationRectangle(point, point);
+      (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    }
   }
 
   onCanvasPointerMove(event: PointerEvent): void {
     if (this.canvasPan?.pointerId === event.pointerId) {
       const previous = this.canvasPan;
       const view = this.viewport();
+      const moved =
+        previous.moved ||
+        Math.hypot(
+          event.clientX - previous.startX,
+          event.clientY - previous.startY,
+        ) > 3;
       this.viewport.set({
         ...view,
         x: view.x + event.clientX - previous.clientX,
@@ -317,90 +610,200 @@ export class BoardPage implements OnInit, OnDestroy {
       });
       this.canvasPan = {
         pointerId: event.pointerId,
+        button: previous.button,
         clientX: event.clientX,
         clientY: event.clientY,
+        startX: previous.startX,
+        startY: previous.startY,
+        targetId: previous.targetId,
+        moved,
       };
       return;
     }
-    if (this.drawingPointerId !== event.pointerId) return;
     const point = this.pointerToBoardPoint(event.clientX, event.clientY);
-    const points = this.drawingPoints();
-    const previous = points[points.length - 1];
-    if (
-      previous &&
-      Math.hypot(point.x - previous.x, point.y - previous.y) < 0.15
-    ) {
+    if (this.drawingPointerId === event.pointerId) {
+      const points = this.drawingPoints();
+      const previous = points[points.length - 1];
+      if (
+        previous &&
+        Math.hypot(point.x - previous.x, point.y - previous.y) < 0.15
+      ) {
+        return;
+      }
+      this.appendDrawingPoint(point);
       return;
     }
-    this.drawingPoints.set([...points, point]);
+    if (this.gesture?.pointerId !== event.pointerId) return;
+    this.gesture.current = point;
+    if (this.gesture.tool === "select") {
+      this.updateSelectionRectangle(this.gesture.start, point);
+    } else if (this.gesture.tool === "lasso") {
+      const points = this.gesture.points ?? [];
+      const last = points[points.length - 1];
+      if (!last || Math.hypot(point.x - last.x, point.y - last.y) >= 0.2) {
+        this.gesture.points = [...points, point];
+        this.lassoPoints.set(this.gesture.points);
+      }
+    } else if (this.gesture.tool === "line") {
+      this.linePreview.set({ start: this.gesture.start, end: point });
+    } else if (this.gesture.tool === "eraser") {
+      this.eraseStrokeAt(event.clientX, event.clientY);
+    } else if (this.isCreationTool(this.gesture.tool)) {
+      this.updateCreationRectangle(this.gesture.start, point);
+    }
   }
 
   onCanvasPointerUp(event: PointerEvent): void {
     if (this.canvasPan?.pointerId === event.pointerId) {
+      const pan = this.canvasPan;
       this.canvasPan = undefined;
       this.canvasPanning.set(false);
+      if (pan.button === 2 && !pan.moved) {
+        const bounds = this.canvas?.nativeElement.getBoundingClientRect();
+        if (bounds) {
+          this.contextMenu.set({
+            x: event.clientX - bounds.left,
+            y: event.clientY - bounds.top,
+            targetId: pan.targetId,
+          });
+        }
+      }
+      if (pan.button === 0) this.suppressNextClick = true;
       return;
     }
-    if (this.drawingPointerId !== event.pointerId) return;
-    this.drawingPointerId = undefined;
-    const points = this.drawingPoints();
-    this.drawingPoints.set([]);
-    if (points.length < 2) {
+    if (this.drawingPointerId === event.pointerId) {
+      this.drawingPointerId = undefined;
+      const points = [...this.drawingPoints()];
+      const finalPoint = this.pointerToBoardPoint(event.clientX, event.clientY);
+      const lastPoint = points[points.length - 1];
+      if (
+        !lastPoint ||
+        Math.hypot(finalPoint.x - lastPoint.x, finalPoint.y - lastPoint.y) >=
+          0.15
+      ) {
+        if (points.length < 512) points.push(finalPoint);
+      }
+      this.drawingPoints.set([]);
+      this.suppressNextClick = true;
+      if (points.length < 2) {
+        this.hasLocalEdit = false;
+        this.finishPendingRefresh();
+        return;
+      }
+      this.addElements([this.createStroke(points)], "pen");
+      return;
+    }
+    const gesture = this.gesture;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    gesture.current = this.pointerToBoardPoint(event.clientX, event.clientY);
+    this.gesture = undefined;
+    this.suppressNextClick = true;
+    this.creationRectangle.set(null);
+    this.selectionRectangle.set(null);
+    if (gesture.tool === "select") {
+      this.selectWithin(gesture.start, gesture.current);
+    } else if (gesture.tool === "lasso") {
+      this.selectWithinLasso(gesture.points ?? []);
+      this.lassoPoints.set([]);
+    } else if (gesture.tool === "line") {
+      this.finishLineGesture(gesture, event.clientX, event.clientY);
+    } else if (gesture.tool === "eraser") {
+      const before = this.eraseBefore;
+      this.eraseBefore = undefined;
       this.hasLocalEdit = false;
-      this.finishPendingRefresh();
-      return;
-    }
-    const stroke = this.createStroke(points);
-    const board = this.board();
-    this.hasLocalEdit = false;
-    if (board) {
-      this.saveElements(
-        [...board.elements, stroke],
-        this.cloneElements(board.elements),
-      );
+      const board = this.board();
+      if (board && before && !this.sameElements(before, board.elements)) {
+        this.saveElements(board.elements, before);
+      } else {
+        this.finishPendingRefresh();
+      }
+    } else if (this.isCreationTool(gesture.tool)) {
+      this.finishCreationGesture(gesture);
     }
   }
 
   onCanvasClick(event: MouseEvent): void {
-    if (
-      event.button !== 0 ||
-      event.target !== this.canvas?.nativeElement ||
-      this.isSample ||
-      !this.canEdit() ||
-      this.isSaving()
-    ) {
+    if (event.button !== 0) return;
+    if (this.suppressNextClick) {
+      this.suppressNextClick = false;
+      return;
+    }
+    if (this.contextMenu()) {
+      this.contextMenu.set(null);
+      return;
+    }
+    if (this.isSample || this.isSaving()) {
       return;
     }
     const tool = this.selectedTool();
-    if (tool === "select" || tool === "draw") {
-      this.selectedElementId.set(null);
+    if (tool === "select") {
+      this.setSelection([]);
       return;
     }
+    if (tool === "hand" || !this.canEdit()) return;
     const board = this.board();
     if (!board) return;
     const point = this.pointerToBoardPoint(event.clientX, event.clientY);
-    const element = this.createElement(tool, point.x, point.y);
-    this.saveElements(
-      [...board.elements, element],
-      this.cloneElements(board.elements),
-    );
-    this.selectedElementId.set(element.id);
+    if (tool === "line") {
+      return;
+    }
+    if (tool === "pen" || tool === "eraser" || tool === "lasso") return;
+    if (this.isCreationTool(tool)) {
+      this.finishCreationGesture({
+        pointerId: -1,
+        tool,
+        start: point,
+        current: point,
+      });
+    }
   }
 
   startElementDrag(element: BoardElement, event: PointerEvent): void {
+    if (event.button === 2 || event.button === 1) return;
+    if (!this.canEdit() || this.isSaving()) return;
+    if (this.selectedTool() === "comment" && element.type === "comment") {
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest("textarea, input")
+      ) {
+        event.stopPropagation();
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      this.setSelection([element.id]);
+      this.focusEditableElement(element.id);
+      return;
+    }
+    if (this.selectedTool() === "line" && event.button === 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.beginLineGesture(
+        event,
+        this.pointerToBoardPoint(event.clientX, event.clientY),
+        element.id,
+      );
+      return;
+    }
+    if (this.selectedTool() === "eraser" && element.type === "stroke") {
+      event.preventDefault();
+      event.stopPropagation();
+      this.beginEraserGesture(
+        event,
+        this.pointerToBoardPoint(event.clientX, event.clientY),
+      );
+      this.eraseStrokeAt(event.clientX, event.clientY);
+      return;
+    }
     if (
       event.button !== 0 ||
-      !this.canEdit() ||
-      this.isSaving() ||
-      this.selectedTool() !== "select"
+      this.selectedTool() !== "select" ||
+      this.spaceHandActive()
     ) {
       return;
     }
     const target = event.target;
-    if (
-      target instanceof HTMLElement &&
-      target.closest("textarea, input, button")
-    ) {
+    if (target instanceof HTMLElement && target.closest("textarea, input")) {
       event.stopPropagation();
       return;
     }
@@ -408,16 +811,29 @@ export class BoardPage implements OnInit, OnDestroy {
     event.stopPropagation();
     const board = this.board();
     if (!board) return;
-    this.selectedElementId.set(element.id);
+    const selectedIds = this.selectedElementIds();
+    const ids = selectedIds.includes(element.id)
+      ? selectedIds
+      : event.ctrlKey || event.metaKey || event.shiftKey
+        ? [...selectedIds, element.id]
+        : [element.id];
+    this.setSelection(ids);
+    const dragIds = [
+      ...new Set([
+        ...ids,
+        ...(element.type === "frame"
+          ? this.elementsInFrame(element, board.elements)
+          : []),
+      ]),
+    ];
     this.elementDrag = {
-      id: element.id,
+      ids: dragIds,
       pointerId: event.pointerId,
       clientX: event.clientX,
       clientY: event.clientY,
-      x: element.x,
-      y: element.y,
       before: this.cloneElements(board.elements),
     };
+    this.pendingElementClickId = element.id;
     this.draggingElementId.set(element.id);
     this.beginLocalEdit();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -429,25 +845,51 @@ export class BoardPage implements OnInit, OnDestroy {
     const board = this.board();
     if (!board) return;
     const zoom = this.viewport().zoom;
-    const x = Math.max(
-      0,
-      Math.min(
-        100,
-        drag.x + ((event.clientX - drag.clientX) / zoom / sceneWidth) * 100,
-      ),
-    );
-    const y = Math.max(
-      0,
-      Math.min(
-        100,
-        drag.y + ((event.clientY - drag.clientY) / zoom / sceneHeight) * 100,
-      ),
-    );
+    const dx = ((event.clientX - drag.clientX) / zoom / sceneWidth) * 100;
+    const dy = ((event.clientY - drag.clientY) / zoom / sceneHeight) * 100;
+    const moveIds = new Set(drag.ids);
+    const beforeById = new Map(drag.before.map((item) => [item.id, item]));
     this.board.set({
       ...board,
-      elements: board.elements.map((element) =>
-        element.id === drag.id ? { ...element, x, y } : element,
-      ),
+      elements: board.elements.map((element) => {
+        if (moveIds.has(element.id)) {
+          const original = beforeById.get(element.id) ?? element;
+          if (element.type === "line") {
+            return {
+              ...element,
+              x: this.clampCoordinate(original.x + dx),
+              y: this.clampCoordinate(original.y + dy),
+              endX: this.clampCoordinate(element.endX + dx),
+              endY: this.clampCoordinate(element.endY + dy),
+            };
+          }
+          return {
+            ...element,
+            x: this.clampCoordinate(original.x + dx),
+            y: this.clampCoordinate(original.y + dy),
+          };
+        }
+        if (element.type === "line") {
+          const original = beforeById.get(element.id);
+          if (!original || original.type !== "line") return element;
+          return {
+            ...element,
+            x: moveIds.has(element.startElementId ?? "")
+              ? this.clampCoordinate(original.x + dx)
+              : original.x,
+            y: moveIds.has(element.startElementId ?? "")
+              ? this.clampCoordinate(original.y + dy)
+              : original.y,
+            endX: moveIds.has(element.endElementId ?? "")
+              ? this.clampCoordinate(original.endX + dx)
+              : original.endX,
+            endY: moveIds.has(element.endElementId ?? "")
+              ? this.clampCoordinate(original.endY + dy)
+              : original.endY,
+          };
+        }
+        return element;
+      }),
     });
   }
 
@@ -456,20 +898,19 @@ export class BoardPage implements OnInit, OnDestroy {
     if (!drag || drag.pointerId !== event.pointerId) return;
     this.elementDrag = undefined;
     this.draggingElementId.set(null);
+    const clickedId = this.pendingElementClickId;
+    globalThis.setTimeout(() => {
+      if (this.pendingElementClickId === clickedId) {
+        this.pendingElementClickId = undefined;
+      }
+    }, 0);
     const board = this.board();
     this.hasLocalEdit = false;
     if (!board) {
       this.finishPendingRefresh();
       return;
     }
-    const moved = board.elements.some((element, index) => {
-      const old = drag.before[index];
-      return (
-        element.id === drag.id &&
-        old &&
-        (element.x !== old.x || element.y !== old.y)
-      );
-    });
+    const moved = !this.sameElements(drag.before, board.elements);
     if (moved) {
       this.saveElements(board.elements, drag.before);
     } else {
@@ -477,17 +918,391 @@ export class BoardPage implements OnInit, OnDestroy {
     }
   }
 
-  beginTextEdit(): void {
+  private isCreationTool(tool: BoardTool): tool is PlacementTool {
+    return (
+      tool === "note" ||
+      tool === "text" ||
+      tool === "card" ||
+      tool === "shape" ||
+      tool === "frame" ||
+      tool === "sticker" ||
+      tool === "comment"
+    );
+  }
+
+  private finishCreationGesture(gesture: PointerGesture): void {
+    if (!this.isCreationTool(gesture.tool)) return;
+    const element = this.createElement(
+      gesture.tool,
+      gesture.start.x,
+      gesture.start.y,
+    );
+    const dragged =
+      Math.hypot(
+        ((gesture.current.x - gesture.start.x) * sceneWidth) / 100,
+        ((gesture.current.y - gesture.start.y) * sceneHeight) / 100,
+      ) > 6;
+    const created = dragged
+      ? this.resizeCreatedElement(element, gesture.start, gesture.current)
+      : element;
+    this.addElements([created], gesture.tool);
+  }
+
+  private resizeCreatedElement(
+    element: BoardElement,
+    start: BoardPoint,
+    end: BoardPoint,
+  ): BoardElement {
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
+    const width = Math.max(0.5, Math.abs(end.x - start.x));
+    const height = Math.max(0.5, Math.abs(end.y - start.y));
+    switch (element.type) {
+      case "note":
+      case "text":
+      case "card":
+      case "shape":
+      case "frame":
+        return {
+          ...element,
+          x,
+          y,
+          width,
+          height,
+          ...(element.type === "text" ? { autoWidth: false } : {}),
+        };
+      default:
+        return element;
+    }
+  }
+
+  private addElements(elements: BoardElement[], tool: BoardTool): void {
+    const board = this.board();
+    if (!board) return;
+    this.saveElements(
+      [...board.elements, ...elements],
+      this.cloneElements(board.elements),
+    );
+    this.setSelection(elements.map((element) => element.id));
+    const editableElement = elements.find(
+      (element) =>
+        element.type === "note" ||
+        element.type === "text" ||
+        element.type === "card" ||
+        element.type === "comment",
+    );
+    if (editableElement) this.focusEditableElement(editableElement.id);
+    if (!["comment", "pen", "eraser", "lasso", "hand"].includes(tool)) {
+      this.selectedTool.set("select");
+    }
+  }
+
+  private focusEditableElement(id: string): void {
+    this.editingElementId.set(id);
+    this.setTimeout(() => {
+      const element = this.canvas?.nativeElement.querySelector<HTMLElement>(
+        `[data-element-id="${id}"] textarea, [data-element-id="${id}"] input`,
+      );
+      element?.focus();
+    });
+  }
+
+  private setTimeout(callback: () => void): void {
+    globalThis.setTimeout(callback, 0);
+  }
+
+  private beginLineGesture(
+    event: PointerEvent,
+    point: BoardPoint,
+    startElementId?: string,
+  ): void {
+    let start = point;
+    if (startElementId) {
+      const element = this.board()?.elements.find(
+        (candidate) => candidate.id === startElementId,
+      );
+      if (element) start = this.edgePoint(element, point);
+    }
+    this.gesture = {
+      pointerId: event.pointerId,
+      tool: "line",
+      start,
+      current: point,
+      ...(startElementId ? { startElementId } : {}),
+    };
+    this.linePreview.set({ start, end: point });
+    this.canvas?.nativeElement.setPointerCapture(event.pointerId);
+  }
+
+  private finishLineGesture(
+    gesture: PointerGesture,
+    clientX: number,
+    clientY: number,
+  ): void {
+    const board = this.board();
+    if (!board) return;
+    const targetId = this.elementIdAtPoint(clientX, clientY);
+    const target = board.elements.find((element) => element.id === targetId);
+    const end = target
+      ? this.edgePoint(target, gesture.current)
+      : gesture.current;
+    const line = {
+      id: crypto.randomUUID(),
+      type: "line" as const,
+      x: gesture.start.x,
+      y: gesture.start.y,
+      endX: end.x,
+      endY: end.y,
+      startElementId: gesture.startElementId ?? null,
+      endElementId: target?.id ?? null,
+      color: "rose" as NoteColor,
+      strokeWidth: 2,
+    };
+    this.linePreview.set(null);
+    this.addElements([line], "line");
+  }
+
+  private beginEraserGesture(event: PointerEvent, point: BoardPoint): void {
+    const board = this.board();
+    if (!board) return;
+    this.eraseBefore ??= this.cloneElements(board.elements);
+    this.gesture = {
+      pointerId: event.pointerId,
+      tool: "eraser",
+      start: point,
+      current: point,
+    };
+    this.beginLocalEdit();
+    this.canvas?.nativeElement.setPointerCapture(event.pointerId);
+  }
+
+  private eraseStrokeAt(clientX: number, clientY: number): void {
+    const id = this.elementIdAtPoint(clientX, clientY);
+    if (!id) return;
+    const board = this.board();
+    if (
+      !board?.elements.some(
+        (element) => element.id === id && element.type === "stroke",
+      )
+    ) {
+      return;
+    }
+    this.board.set({
+      ...board,
+      elements: this.removeElements(board.elements, new Set([id])),
+    });
+  }
+
+  private updateSelectionRectangle(start: BoardPoint, end: BoardPoint): void {
+    this.selectionRectangle.set(this.normalizedRectangle(start, end));
+  }
+
+  private updateCreationRectangle(start: BoardPoint, end: BoardPoint): void {
+    this.creationRectangle.set(this.normalizedRectangle(start, end));
+  }
+
+  private normalizedRectangle(
+    start: BoardPoint,
+    end: BoardPoint,
+  ): { x: number; y: number; width: number; height: number } {
+    return {
+      x: Math.min(start.x, end.x),
+      y: Math.min(start.y, end.y),
+      width: Math.abs(end.x - start.x),
+      height: Math.abs(end.y - start.y),
+    };
+  }
+
+  private selectWithin(start: BoardPoint, end: BoardPoint): void {
+    const rectangle = this.normalizedRectangle(start, end);
+    if (rectangle.width < 0.1 && rectangle.height < 0.1) {
+      this.setSelection([]);
+      return;
+    }
+    const right = rectangle.x + rectangle.width;
+    const bottom = rectangle.y + rectangle.height;
+    const selected = (this.board()?.elements ?? [])
+      .filter((element) => {
+        const bounds = this.elementBounds(element);
+        return (
+          bounds.right >= rectangle.x &&
+          bounds.left <= right &&
+          bounds.bottom >= rectangle.y &&
+          bounds.top <= bottom
+        );
+      })
+      .map((element) => element.id);
+    this.setSelection(selected);
+  }
+
+  private selectWithinLasso(points: BoardPoint[]): void {
+    if (points.length < 3) {
+      this.setSelection([]);
+      return;
+    }
+    const selected = (this.board()?.elements ?? [])
+      .filter((element) => {
+        const bounds = this.elementBounds(element);
+        const center = {
+          x: (bounds.left + bounds.right) / 2,
+          y: (bounds.top + bounds.bottom) / 2,
+        };
+        let inside = false;
+        for (
+          let index = 0, previous = points.length - 1;
+          index < points.length;
+          previous = index++
+        ) {
+          const currentPoint = points[index];
+          const previousPoint = points[previous];
+          const crosses =
+            currentPoint.y > center.y !== previousPoint.y > center.y &&
+            center.x <
+              ((previousPoint.x - currentPoint.x) *
+                (center.y - currentPoint.y)) /
+                (previousPoint.y - currentPoint.y) +
+                currentPoint.x;
+          if (crosses) inside = !inside;
+        }
+        return inside;
+      })
+      .map((element) => element.id);
+    this.setSelection(selected);
+  }
+
+  private elementBounds(element: BoardElement): {
+    left: number;
+    top: number;
+    right: number;
+    bottom: number;
+  } {
+    if (element.type === "line") {
+      return {
+        left: Math.min(element.x, element.endX),
+        top: Math.min(element.y, element.endY),
+        right: Math.max(element.x, element.endX),
+        bottom: Math.max(element.y, element.endY),
+      };
+    }
+    const width = this.itemWidth(element);
+    const height = this.itemHeight(element) ?? 4;
+    return {
+      left: element.x,
+      top: element.y,
+      right: element.x + width,
+      bottom: element.y + height,
+    };
+  }
+
+  private elementsInFrame(
+    frame: Extract<BoardElement, { type: "frame" }>,
+    elements: BoardElement[],
+  ): string[] {
+    const frameBounds = this.elementBounds(frame);
+    return [
+      frame.id,
+      ...elements
+        .filter((element) => {
+          if (element.id === frame.id) return false;
+          const bounds = this.elementBounds(element);
+          const centerX = (bounds.left + bounds.right) / 2;
+          const centerY = (bounds.top + bounds.bottom) / 2;
+          return (
+            centerX >= frameBounds.left &&
+            centerX <= frameBounds.right &&
+            centerY >= frameBounds.top &&
+            centerY <= frameBounds.bottom
+          );
+        })
+        .map((element) => element.id),
+    ];
+  }
+
+  private edgePoint(element: BoardElement, point: BoardPoint): BoardPoint {
+    if (element.type === "line" || element.type === "stroke") return point;
+    const bounds = this.elementBounds(element);
+    const candidates = [
+      {
+        x: bounds.left,
+        y: Math.max(bounds.top, Math.min(bounds.bottom, point.y)),
+      },
+      {
+        x: bounds.right,
+        y: Math.max(bounds.top, Math.min(bounds.bottom, point.y)),
+      },
+      {
+        x: Math.max(bounds.left, Math.min(bounds.right, point.x)),
+        y: bounds.top,
+      },
+      {
+        x: Math.max(bounds.left, Math.min(bounds.right, point.x)),
+        y: bounds.bottom,
+      },
+    ];
+    return candidates.reduce((nearest, candidate) =>
+      Math.hypot(candidate.x - point.x, candidate.y - point.y) <
+      Math.hypot(nearest.x - point.x, nearest.y - point.y)
+        ? candidate
+        : nearest,
+    );
+  }
+
+  private elementIdAtPoint(clientX: number, clientY: number): string | null {
+    const target = document.elementFromPoint(clientX, clientY);
+    const item = target?.closest<HTMLElement>("[data-element-id]");
+    return item?.dataset["elementId"] ?? null;
+  }
+
+  private clampCoordinate(value: number): number {
+    return Math.max(0, Math.min(100, value));
+  }
+
+  private cancelGesture(): void {
+    if (this.eraseBefore) {
+      const board = this.board();
+      if (board) this.board.set({ ...board, elements: this.eraseBefore });
+    }
+    this.eraseBefore = undefined;
+    this.gesture = undefined;
+    this.elementDrag = undefined;
+    this.canvasPan = undefined;
+    this.drawingPointerId = undefined;
+    this.drawingPoints.set([]);
+    this.lassoPoints.set([]);
+    this.selectionRectangle.set(null);
+    this.creationRectangle.set(null);
+    this.linePreview.set(null);
+    this.canvasPanning.set(false);
+    this.draggingElementId.set(null);
+    this.hasLocalEdit = false;
+  }
+
+  beginTextEdit(id?: string): void {
     if (!this.canEdit() || this.isSaving()) return;
+    if (id && this.editingElementId() !== id) return;
     this.textEditBefore = this.cloneElements(this.board()?.elements ?? []);
     this.beginLocalEdit();
   }
 
   changeElementText(id: string, text: string): void {
     if (!this.canEdit() || this.isSaving()) return;
-    this.updateElementLocally(id, (element) =>
-      "text" in element ? { ...element, text } : element,
-    );
+    this.updateElementLocally(id, (element) => {
+      switch (element.type) {
+        case "note":
+        case "card":
+        case "comment":
+        case "shape":
+          return { ...element, text };
+        case "text":
+          return {
+            ...element,
+            text,
+            ...(element.autoWidth ? { width: this.autoTextWidth(text) } : {}),
+          };
+        default:
+          return element;
+      }
+    });
   }
 
   changeElementTitle(id: string, title: string): void {
@@ -501,6 +1316,7 @@ export class BoardPage implements OnInit, OnDestroy {
     const before = this.textEditBefore;
     this.textEditBefore = undefined;
     this.hasLocalEdit = false;
+    this.editingElementId.set(null);
     const board = this.board();
     if (!board || !before || this.sameElements(before, board.elements)) {
       this.finishPendingRefresh();
@@ -513,9 +1329,11 @@ export class BoardPage implements OnInit, OnDestroy {
     if (!this.canEdit() || this.isSaving()) return;
     const board = this.board();
     if (!board) return;
-    const elements = board.elements.filter((element) => element.id !== id);
+    const elements = this.removeElements(board.elements, new Set([id]));
     if (elements.length === board.elements.length) return;
-    this.selectedElementId.set(null);
+    this.setSelection(
+      this.selectedElementIds().filter((selectedId) => selectedId !== id),
+    );
     this.saveElements(elements, this.cloneElements(board.elements));
   }
 
@@ -549,15 +1367,20 @@ export class BoardPage implements OnInit, OnDestroy {
       case "text":
       case "card":
       case "shape":
-      case "stroke":
       case "frame":
+        return element.type === "text" && element.autoWidth
+          ? this.autoTextWidth(element.text)
+          : element.width;
+      case "stroke":
         return element.width;
+      case "line":
+        return Math.max(0.5, Math.abs(element.endX - element.x));
       case "note":
-        return 12;
+        return element.width ?? 10;
       case "sticker":
         return 5;
       case "comment":
-        return 13;
+        return 3;
     }
   }
 
@@ -568,15 +1391,45 @@ export class BoardPage implements OnInit, OnDestroy {
       case "stroke":
       case "frame":
         return element.height;
+      case "line":
+        return Math.max(0.5, Math.abs(element.endY - element.y));
       case "text":
-        return null;
+        return element.autoWidth
+          ? this.autoTextHeight(element.text, this.autoTextWidth(element.text))
+          : (element.height ?? null);
       case "note":
-        return 12;
+        return element.height ?? 15;
       case "sticker":
         return 5;
       case "comment":
-        return 9;
+        return 3;
     }
+  }
+
+  itemLeft(element: BoardElement): number {
+    return element.type === "line"
+      ? Math.min(element.x, element.endX)
+      : element.x;
+  }
+
+  itemTop(element: BoardElement): number {
+    return element.type === "line"
+      ? Math.min(element.y, element.endY)
+      : element.y;
+  }
+
+  lineCoordinate(
+    line: Extract<BoardElement, { type: "line" }>,
+    axis: "x" | "y",
+    endpoint: "start" | "end",
+  ): number {
+    const start = axis === "x" ? line.x : line.y;
+    const end = axis === "x" ? line.endX : line.endY;
+    const lower = Math.min(start, end);
+    const upper = Math.max(start, end);
+    if (upper - lower < 0.5) return 50;
+    const value = endpoint === "start" ? start : end;
+    return value === lower ? 0 : 100;
   }
 
   itemClass(element: BoardElement): string {
@@ -585,28 +1438,68 @@ export class BoardPage implements OnInit, OnDestroy {
     return `board-item ${element.type}-item${shapeClass}${"color" in element ? ` item-${element.color}` : ""}`;
   }
 
+  colorValue(color: NoteColor): string {
+    return {
+      cream: "#d5a928",
+      rose: "#c75d71",
+      sage: "#548a5e",
+      sky: "#4b82b8",
+    }[color];
+  }
+
   strokePointString(stroke: Extract<BoardElement, { type: "stroke" }>): string {
     return stroke.points.map((point) => `${point.x},${point.y}`).join(" ");
   }
 
-  drawingPointString(): string {
-    return this.drawingPoints()
-      .map((point) => `${point.x},${point.y}`)
-      .join(" ");
+  drawingPointString(points = this.drawingPoints()): string {
+    return points.map((point) => `${point.x},${point.y}`).join(" ");
+  }
+
+  private autoTextWidth(text: string): number {
+    const longestLine = Math.max(
+      0,
+      ...text.split("\n").map((line) => line.length),
+    );
+    return Math.max(8, Math.min(40, 4 + longestLine * 0.38));
+  }
+
+  private autoTextHeight(text: string, width: number): number {
+    const charactersPerLine = Math.max(8, ((width / 100) * sceneWidth) / 9);
+    const lines = text
+      .split("\n")
+      .reduce(
+        (count, line) =>
+          count + Math.max(1, Math.ceil(line.length / charactersPerLine)),
+        0,
+      );
+    return Math.max(4, lines * 1.8);
   }
 
   private createElement(
-    tool: Exclude<BoardTool, "select" | "draw">,
+    tool: PlacementTool,
     x: number,
     y: number,
   ): BoardElement {
     const id = crypto.randomUUID();
-    const elements: Record<
-      Exclude<BoardTool, "select" | "draw">,
-      NewBoardElement
-    > = {
-      note: { type: "note", x, y, text: "", color: "rose" },
-      text: { type: "text", x, y, text: "", color: "cream", width: 16 },
+    const elements: Record<PlacementTool, NewBoardElement> = {
+      note: {
+        type: "note",
+        x,
+        y,
+        text: "",
+        color: "cream",
+        width: 10,
+        height: 15,
+      },
+      text: {
+        type: "text",
+        x,
+        y,
+        text: "",
+        color: "cream",
+        width: 8,
+        autoWidth: true,
+      },
       card: {
         type: "card",
         x,
@@ -625,7 +1518,7 @@ export class BoardPage implements OnInit, OnDestroy {
         height: 10,
         color: "sky",
       },
-      frame: { type: "frame", x, y, title: "Frame", width: 40, height: 30 },
+      frame: { type: "frame", x, y, title: "Frame", width: 40, height: 33.75 },
       sticker: { type: "sticker", x, y, emoji: "⭐" },
       comment: { type: "comment", x, y, text: "Add a comment…" },
     };
@@ -654,6 +1547,36 @@ export class BoardPage implements OnInit, OnDestroy {
       color: "rose",
       strokeWidth: 2,
     };
+  }
+
+  private appendDrawingPoint(point: BoardPoint): void {
+    const points = this.drawingPoints();
+    this.drawingPoints.set(
+      points.length < 512
+        ? [...points, point]
+        : [...points.filter((_, index) => index % 2 === 0), point],
+    );
+  }
+
+  private removeElements(
+    elements: BoardElement[],
+    ids: Set<string>,
+  ): BoardElement[] {
+    return elements
+      .filter((element) => !ids.has(element.id))
+      .map((element) =>
+        element.type === "line"
+          ? {
+              ...element,
+              startElementId: ids.has(element.startElementId ?? "")
+                ? null
+                : element.startElementId,
+              endElementId: ids.has(element.endElementId ?? "")
+                ? null
+                : element.endElementId,
+            }
+          : element,
+      );
   }
 
   private pointerToBoardPoint(clientX: number, clientY: number): BoardPoint {

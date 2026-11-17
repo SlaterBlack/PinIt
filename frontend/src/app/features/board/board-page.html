@@ -28,6 +28,17 @@
     @if (isSample) {
     <span class="save-state">Preview board</span>
     } @else {
+    <label class="input-mode">
+      <span>Input</span>
+      <select
+        aria-label="Mouse or trackpad mode"
+        [value]="inputMode()"
+        (change)="setInputMode($event)"
+      >
+        <option value="mouse">Mouse</option>
+        <option value="trackpad">Trackpad</option>
+      </select>
+    </label>
     <span class="save-state">
       <span>{{ liveStatus() }}</span>
       <span aria-hidden="true">·</span>
@@ -48,11 +59,13 @@
         @for (tool of tools; track tool.id) {
         <button
           type="button"
+          [draggable]="canEdit() && !isSaving()"
           [disabled]="isSample || !canEdit() || isSaving()"
           [class.is-active]="selectedTool() === tool.id"
           [attr.aria-pressed]="selectedTool() === tool.id"
           [attr.aria-label]="tool.label"
           [title]="tool.label"
+          (dragstart)="onToolDragStart($event, tool.id)"
           (click)="setTool(tool.id)"
         >
           {{ tool.icon }}
@@ -108,6 +121,8 @@
       class="board-canvas"
       [class.sample-canvas]="isSample"
       [class.is-panning]="canvasPanning()"
+      [class.is-hand-mode]="selectedTool() === 'hand' || spaceHandActive()"
+      [class.is-placing]="selectedTool() !== 'select' && selectedTool() !== 'hand'"
       [attr.aria-label]="isSample ? 'Sample board canvas' : 'Board canvas'"
       (wheel)="zoomCanvas($event)"
       (pointerdown)="onCanvasPointerDown($event)"
@@ -116,6 +131,8 @@
       (pointercancel)="onCanvasPointerUp($event)"
       (click)="onCanvasClick($event)"
       (contextmenu)="$event.preventDefault()"
+      (dragover)="$event.preventDefault()"
+      (drop)="onCanvasDrop($event)"
     >
       <div class="board-scene" [style.transform]="sceneTransform()">
         @if (isSample) {
@@ -135,26 +152,38 @@
         currentBoard.elements; track item.id) {
         <div
           [class]="itemClass(item)"
-          [class.is-selected]="selectedElementId() === item.id"
+          [class.is-selected]="selectedElementIds().includes(item.id)"
           [class.is-dragging]="draggingElementId() === item.id"
-          [style.left.%]="item.x"
-          [style.top.%]="item.y"
+          [attr.data-element-id]="item.id"
+          [style.left.%]="itemLeft(item)"
+          [style.top.%]="itemTop(item)"
           [style.width.%]="itemWidth(item)"
           [style.height.%]="itemHeight(item)"
           (pointerdown)="startElementDrag(item, $event)"
           (pointermove)="moveElement($event)"
           (pointerup)="finishElementDrag($event)"
           (pointercancel)="finishElementDrag($event)"
-          (click)="$event.stopPropagation()"
+          (click)="onElementClick(item, $event)"
+          (dblclick)="onElementDoubleClick(item, $event)"
         >
+          <button
+            type="button"
+            class="item-drag-handle"
+            [disabled]="!canEdit()"
+            [attr.aria-label]="'Move ' + item.type"
+            title="Drag to move"
+            (click)="$event.stopPropagation()"
+          >
+            ⠿
+          </button>
           @switch (item.type) { @case ("note") {
           <textarea
             aria-label="Sticky note text"
             maxlength="2000"
-            [readonly]="!canEdit()"
+            [readonly]="!canEdit() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
-            (focus)="beginTextEdit()"
+            (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
             placeholder="Write an idea…"
           ></textarea>
@@ -163,10 +192,10 @@
             class="plain-text"
             aria-label="Board text"
             maxlength="2000"
-            [readonly]="!canEdit()"
+            [readonly]="!canEdit() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
-            (focus)="beginTextEdit()"
+            (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
             placeholder="Type something…"
           ></textarea>
@@ -175,25 +204,34 @@
             class="item-title"
             aria-label="Card title"
             maxlength="120"
-            [readonly]="!canEdit()"
+            [readonly]="!canEdit() || editingElementId() !== item.id"
             [ngModel]="item.title"
             (ngModelChange)="changeElementTitle(item.id, $event)"
-            (focus)="beginTextEdit()"
+            (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
           />
           <textarea
             aria-label="Card text"
             maxlength="2000"
-            [readonly]="!canEdit()"
+            [readonly]="!canEdit() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
-            (focus)="beginTextEdit()"
+            (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
             placeholder="Add details…"
           ></textarea>
-          } @case ("shape") {
-          <span class="shape-label" aria-hidden="true"> {{ item.shape }} </span>
-          } @case ("stroke") {
+          } @case ("shape") { @if (editingElementId() === item.id) {
+          <textarea
+            aria-label="Shape text"
+            maxlength="2000"
+            [ngModel]="item.text ?? ''"
+            (ngModelChange)="changeElementText(item.id, $event)"
+            (focus)="beginTextEdit(item.id)"
+            (blur)="saveTextEdit()"
+          ></textarea>
+          } @else {
+          <span class="shape-label" aria-hidden="true">{{ item.shape }}</span>
+          } } @case ("stroke") {
           <svg
             class="stroke-svg"
             viewBox="0 0 100 100"
@@ -203,36 +241,70 @@
             <polyline
               [attr.points]="strokePointString(item)"
               [attr.stroke-width]="item.strokeWidth"
-              [attr.stroke]="item.color"
+              [attr.stroke]="colorValue(item.color)"
+            />
+          </svg>
+          } @case ("line") {
+          <svg
+            class="line-svg"
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-label="Connection line"
+          >
+            <defs>
+              <marker
+                [attr.id]="'line-end-' + item.id"
+                markerWidth="8"
+                markerHeight="8"
+                refX="8"
+                refY="4"
+                orient="auto"
+              >
+                <path
+                  d="M 0 0 L 8 4 L 0 8 z"
+                  [attr.fill]="colorValue(item.color)"
+                />
+              </marker>
+            </defs>
+            <line
+              [attr.x1]="lineCoordinate(item, 'x', 'start')"
+              [attr.y1]="lineCoordinate(item, 'y', 'start')"
+              [attr.x2]="lineCoordinate(item, 'x', 'end')"
+              [attr.y2]="lineCoordinate(item, 'y', 'end')"
+              [attr.stroke]="colorValue(item.color)"
+              [attr.stroke-width]="item.strokeWidth"
+              [attr.marker-end]="'url(#line-end-' + item.id + ')'"
             />
           </svg>
           } @case ("sticker") {
           <span class="sticker-emoji" role="img" aria-label="Sticker">
             {{ item.emoji }}
           </span>
-          } @case ("comment") {
+          } @case ("comment") { @if (editingElementId() === item.id) {
           <textarea
             aria-label="Comment"
             maxlength="2000"
-            [readonly]="!canEdit()"
+            [readonly]="!canEdit() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
-            (focus)="beginTextEdit()"
+            (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
             placeholder="Add a comment…"
           ></textarea>
-          } @case ("frame") {
+          } @else {
+          <span class="comment-pin" role="img" aria-label="Comment">💬</span>
+          } } @case ("frame") {
           <input
             class="item-title"
             aria-label="Frame title"
             maxlength="120"
-            [readonly]="!canEdit()"
+            [readonly]="!canEdit() || editingElementId() !== item.id"
             [ngModel]="item.title"
             (ngModelChange)="changeElementTitle(item.id, $event)"
-            (focus)="beginTextEdit()"
+            (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
           />
-          } } @if (canEdit() && selectedElementId() === item.id) {
+          } } @if (canEdit() && selectedElementIds().includes(item.id)) {
           <button
             type="button"
             class="item-delete"
@@ -254,9 +326,88 @@
         >
           <polyline [attr.points]="drawingPointString()" />
         </svg>
-        } }
+        } @if (lassoPoints().length > 1) {
+        <svg
+          class="lasso-preview"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <polyline [attr.points]="drawingPointString(lassoPoints())" />
+        </svg>
+        } } @if (creationRectangle(); as rect) {
+        <div
+          class="creation-preview"
+          [style.left.%]="rect.x"
+          [style.top.%]="rect.y"
+          [style.width.%]="rect.width"
+          [style.height.%]="rect.height"
+        ></div>
+        } @if (selectionRectangle(); as rect) {
+        <div
+          class="selection-rectangle"
+          [style.left.%]="rect.x"
+          [style.top.%]="rect.y"
+          [style.width.%]="rect.width"
+          [style.height.%]="rect.height"
+        ></div>
+        } @if (linePreview(); as line) {
+        <svg
+          class="line-preview"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <line
+            [attr.x1]="line.start.x"
+            [attr.y1]="line.start.y"
+            [attr.x2]="line.end.x"
+            [attr.y2]="line.end.y"
+          />
+        </svg>
+        }
       </div>
-      @if (!isSample && board()?.elements?.length === 0) {
+      @if (selectedElementIds().length > 0 && selectedTool() === 'select' &&
+      canEdit()) {
+      <div
+        class="floating-toolbar"
+        aria-label="Selection formatting"
+        (pointerdown)="$event.stopPropagation()"
+        (click)="$event.stopPropagation()"
+      >
+        <span>{{ selectedElementIds().length }} selected</span>
+        @for (color of colorOptions; track color) {
+        <button
+          type="button"
+          class="color-swatch"
+          [class]="'color-swatch swatch-' + color"
+          [attr.aria-label]="'Set color ' + color"
+          (click)="applySelectedColor(color)"
+        ></button>
+        }
+        <button
+          type="button"
+          class="toolbar-delete"
+          (click)="deleteSelection()"
+        >
+          Delete
+        </button>
+      </div>
+      } @if (contextMenu(); as menu) {
+      <div
+        class="board-context-menu"
+        [style.left.px]="menu.x"
+        [style.top.px]="menu.y"
+        (pointerdown)="$event.stopPropagation()"
+        (click)="$event.stopPropagation()"
+      >
+        @if (menu.targetId && canEdit()) {
+        <button type="button" (click)="contextDelete()">Delete item</button>
+        } @else {
+        <button type="button" (click)="resetView()">Reset view</button>
+        }
+      </div>
+      } @if (!isSample && board()?.elements?.length === 0) {
       <div class="canvas-empty-state">
         <span class="empty-state-mark" aria-hidden="true">P</span>
         <h2>Your canvas is ready</h2>

@@ -1,0 +1,106 @@
+.appearance-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-md);
+  background: rgb(25 18 13 / 48%);
+}
+
+.appearance-dialog {
+  width: min(100%, 440px);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+
+  h2 {
+    margin: 0 0 var(--space-sm);
+  }
+
+  > p {
+    color: var(--color-text-muted);
+  }
+}
+
+.theme-field {
+  display: grid;
+  gap: var(--space-xs);
+  margin-top: var(--space-lg);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.theme-select {
+  position: relative;
+}
+
+.theme-select-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.theme-options {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + var(--space-xs));
+  right: 0;
+  left: 0;
+  display: grid;
+  padding: 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.theme-option {
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+
+  &:hover,
+  &:focus-visible,
+  &[aria-checked="true"] {
+    background: var(--color-primary-light);
+    outline: none;
+  }
+}
+
+.theme-save-status,
+.theme-save-error {
+  font-size: 0.875rem;
+}
+
+.theme-save-status {
+  color: var(--color-text-muted);
+}
+
+.theme-save-error {
+  color: var(--color-danger);
+}
+
+.appearance-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-lg);
+}

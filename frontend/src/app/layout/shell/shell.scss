@@ -23,24 +23,121 @@
 }
 
 .navbar-brand {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
+  min-height: 40px;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--color-text);
+  cursor: pointer;
   font-size: 1.05rem;
   font-weight: 700;
   letter-spacing: -0.035em;
   text-decoration: none;
+
+  img {
+    display: block;
+    border-radius: 6px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--color-primary-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
 }
 
-.brand-mark {
+.service-switcher {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.service-switcher-chevron,
+.account-menu-chevron {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.service-menu-panel,
+.account-menu-panel {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 0.5rem);
   display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--color-primary);
-  color: var(--color-contrast);
+  min-width: 220px;
+  padding: 0.35rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.service-menu-panel {
+  left: 0;
+  max-width: calc(100vw - 2rem);
+}
+
+.service-menu-item,
+.account-menu-panel a,
+.account-menu-panel button,
+.service-menu-message button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0.6rem 0.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--color-primary-light);
+    outline: none;
+  }
+}
+
+.service-menu-item {
+  img {
+    flex: 0 0 24px;
+    border-radius: 5px;
+    object-fit: cover;
+  }
+}
+
+.service-menu-message {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+
+  p {
+    margin: 0 0 var(--space-xs);
+  }
+
+  button {
+    margin: var(--space-xs) -0.75rem -0.6rem;
+    width: calc(100% + 1.5rem);
+    color: var(--color-accent);
+  }
 }
 
 .brand-accent {
@@ -75,20 +172,59 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--space-sm);
+  margin-left: auto;
 }
 
-.user-name {
-  max-width: 180px;
-  overflow: hidden;
+.account-menu {
+  position: relative;
+}
+
+.account-menu-trigger {
+  box-sizing: border-box;
+  display: flex;
+  width: 190px;
+  height: 40px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: var(--color-text);
-  font-size: 0.875rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-align: left;
+
+  &:hover,
+  &:focus-visible {
+    border-color: var(--color-accent);
+    background: var(--color-primary-light);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+}
+
+.account-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.logout-button {
-  min-height: 36px;
+.account-menu-panel {
+  right: 0;
+
+  a,
+  button {
+    display: block;
+    text-align: left;
+  }
 }
 
 .theme-sync-error {
@@ -99,6 +235,47 @@
   background: var(--color-danger-light);
   color: var(--color-danger);
   font-size: 0.85rem;
+}
+
+.install-dialog-backdrop {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-md);
+  background: rgb(25 18 13 / 48%);
+}
+
+.install-dialog {
+  width: min(100%, 440px);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+
+  h2 {
+    margin: 0 0 var(--space-sm);
+  }
+
+  ol {
+    padding-left: 1.4rem;
+  }
+
+  li + li {
+    margin-top: var(--space-xs);
+  }
+}
+
+.install-error {
+  color: var(--color-danger);
+}
+
+.install-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-lg);
 }
 
 @media (max-width: 700px) {
@@ -120,10 +297,10 @@
   }
 
   .header-actions {
-    margin-left: auto;
+    flex: 0 0 auto;
   }
 
-  .user-name {
-    display: none;
+  .account-menu-trigger {
+    width: min(180px, 42vw);
   }
 }

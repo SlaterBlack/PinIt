@@ -1,0 +1,70 @@
+.profile-page {
+  width: min(100% - 2rem, 760px);
+  margin: clamp(2rem, 6vw, 4rem) auto;
+}
+
+.profile-heading {
+  margin-bottom: var(--space-lg);
+
+  h1 {
+    margin: 0 0 var(--space-xs);
+  }
+
+  p:last-child {
+    margin: 0;
+    color: var(--color-text-muted);
+  }
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-xs);
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.profile-card {
+  display: grid;
+  max-width: 560px;
+  gap: var(--space-md);
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.profile-field {
+  display: grid;
+  gap: var(--space-xs);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 600;
+
+  input {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+
+    &:focus {
+      border-color: var(--color-accent);
+      outline: 3px solid
+        color-mix(in srgb, var(--color-accent) 22%, transparent);
+    }
+  }
+}
+
+.profile-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+}
+
+.profile-success {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 0.9rem;
+}

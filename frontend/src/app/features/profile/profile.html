@@ -1,0 +1,62 @@
+<section class="profile-page">
+  <div class="profile-heading">
+    <p class="eyebrow">Account settings</p>
+    <h1>My account</h1>
+    <p>
+      Manage the details you use to sign in to PinIT and your other services.
+    </p>
+  </div>
+
+  @if (isLoading()) {
+  <p role="status">Loading account details…</p>
+  } @else {
+  <form class="card profile-card" (ngSubmit)="save()">
+    <label class="profile-field">
+      Name
+      <input
+        type="text"
+        autocomplete="name"
+        required
+        [ngModel]="name()"
+        (ngModelChange)="name.set($event)"
+        name="name"
+      />
+    </label>
+
+    <label class="profile-field">
+      Email
+      <input
+        type="email"
+        autocomplete="email"
+        required
+        [ngModel]="email()"
+        (ngModelChange)="email.set($event)"
+        name="email"
+      />
+    </label>
+
+    <label class="profile-field">
+      New password
+      <input
+        type="password"
+        autocomplete="new-password"
+        minlength="8"
+        placeholder="Leave blank to keep your current password"
+        [ngModel]="password()"
+        (ngModelChange)="password.set($event)"
+        name="password"
+      />
+    </label>
+
+    @if (errorMessage(); as error) {
+    <p class="profile-error" role="alert">{{ error }}</p>
+    } @if (successMessage(); as success) {
+    <p class="profile-success" role="status">{{ success }}</p>
+    }
+
+    <button class="btn btn-primary" type="submit" [disabled]="isSaving()">
+      {{ isSaving() ? 'Saving…' : 'Save changes' }}
+    </button>
+  </form>
+  }
+</section>

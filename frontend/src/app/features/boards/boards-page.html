@@ -90,18 +90,162 @@
             <span class="board-permission">{{ board.permission }}</span>
           </div>
         </a>
-        @if (board.permission === 'owner' || board.permission === 'admin') {
-        <button
-          class="btn btn-danger"
-          type="button"
-          (click)="$event.stopPropagation(); deleteBoard(board)"
-        >
-          Delete
-        </button>
+        @if (board.permission !== 'view') {
+        <div class="board-card-actions">
+          <button
+            class="board-card-actions-trigger"
+            type="button"
+            [attr.aria-label]="'Actions for ' + board.title"
+            aria-haspopup="menu"
+            [attr.aria-expanded]="openBoardActionsId() === board.id"
+            [attr.aria-controls]="'board-actions-' + board.id"
+            (click)="toggleBoardActions(board.id); $event.stopPropagation()"
+          >
+            <span aria-hidden="true">…</span>
+          </button>
+          @if (openBoardActionsId() === board.id) {
+          <div
+            class="board-card-actions-menu"
+            role="menu"
+            [id]="'board-actions-' + board.id"
+            [attr.aria-label]="'Actions for ' + board.title"
+            (click)="$event.stopPropagation()"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              (click)="openRenameDialog(board)"
+            >
+              Rename
+            </button>
+            @if (board.permission === 'admin') {
+            <button
+              type="button"
+              role="menuitem"
+              (click)="openAccessDialog(board)"
+            >
+              Edit access
+            </button>
+            } @if (board.permission === 'owner' || board.permission === 'admin')
+            {
+            <button
+              class="menu-item-danger"
+              type="button"
+              role="menuitem"
+              (click)="deleteBoard(board)"
+            >
+              Delete board
+            </button>
+            }
+          </div>
+          }
+        </div>
         }
       </article>
       }
     </div>
     }
   </section>
+
+  @if (renamingBoard(); as board) {
+  <div class="board-dialog-backdrop" (click)="closeRenameDialog()">
+    <section
+      class="board-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rename-board-title"
+      (click)="$event.stopPropagation()"
+    >
+      <h2 id="rename-board-title">Rename board</h2>
+      <form (ngSubmit)="renameBoard()">
+        <label for="rename-board-input">Board name</label>
+        <input
+          id="rename-board-input"
+          name="renameTitle"
+          type="text"
+          maxlength="120"
+          required
+          autofocus
+          [ngModel]="renameTitle()"
+          (ngModelChange)="renameTitle.set($event)"
+          [disabled]="isRenaming()"
+        />
+        @if (renameError(); as error) {
+        <p class="error-message" role="alert">{{ error }}</p>
+        }
+        <div class="board-dialog-actions">
+          <button
+            class="btn btn-secondary"
+            type="button"
+            [disabled]="isRenaming()"
+            (click)="closeRenameDialog()"
+          >
+            Cancel
+          </button>
+          <button
+            class="btn btn-primary"
+            type="submit"
+            [disabled]="isRenaming()"
+          >
+            {{ isRenaming() ? 'Saving…' : 'Save name' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+  } @if (accessBoard(); as board) {
+  <div class="board-dialog-backdrop" (click)="closeAccessDialog()">
+    <section
+      class="board-dialog board-access-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="board-access-title"
+      (click)="$event.stopPropagation()"
+    >
+      <h2 id="board-access-title">Access for {{ board.title }}</h2>
+      <p class="board-access-description">
+        Workspace users can edit shared boards. Set access for demo users here.
+      </p>
+      @if (accessError(); as error) {
+      <p class="error-message" role="alert">{{ error }}</p>
+      } @if (accessLoading()) {
+      <p role="status">Loading access…</p>
+      } @else if (demoUsers().length === 0) {
+      <p class="empty-boards">No demo users are available.</p>
+      } @else {
+      <div class="board-access-list">
+        @for (user of demoUsers(); track user.id) {
+        <label class="board-access-row">
+          <span>
+            <strong>{{ user.name }}</strong>
+            <small>{{ user.email }}</small>
+          </span>
+          <select
+            [attr.aria-label]="'Access for ' + user.name"
+            [ngModel]="demoGrants()[user.id] || ''"
+            (ngModelChange)="setDemoAccess(user.id, $event)"
+            [ngModelOptions]="{ standalone: true }"
+            [disabled]="savingAccessUserId() === user.id"
+          >
+            <option value="">Hidden</option>
+            <option value="view">View only</option>
+            <option value="edit">Can edit</option>
+          </select>
+        </label>
+        }
+      </div>
+      }
+      <div class="board-dialog-actions">
+        <button
+          class="btn btn-secondary"
+          type="button"
+          [disabled]="savingAccessUserId() !== null"
+          (click)="closeAccessDialog()"
+        >
+          Close
+        </button>
+      </div>
+    </section>
+  </div>
+  }
 </main>

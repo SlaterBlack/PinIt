@@ -70,10 +70,14 @@ under systemd using `APP_DIRECTORY`, `APP_USER`, and `APP_GROUP` from `.env`.
 
 ## Boards and access
 
-Signed-in users can create boards and edit their titles and sticky notes.
-Changes are saved through StoreIt and shared live with other users who have
-access to the board. The current canvas supports sticky notes, including
-editing, moving, and deleting them.
+Signed-in workspace users can see, create, and edit boards. Independent item
+changes are merged through StoreIt and sent live to other connected users.
+Concurrent changes to the same item are surfaced as conflicts; users can
+reapply or discard their local change after the latest board is loaded. Only
+the board owner or an admin can delete a board. This live synchronization
+currently assumes one active StoreIt process;
+multiple backend instances need shared write coordination and a cross-instance
+update broadcaster.
 
 StoreIt admins can create Demo users in the user-management page. Demo users
 have view-only access in ClockIt, ManageIt, and SplatIt. In PinIt they start

@@ -48,7 +48,17 @@
   </header>
 
   @if (errorMessage(); as error) {
-  <p class="board-error" role="alert">{{ error }}</p>
+  <div class="board-error" role="alert">
+    <span>{{ error }}</span>
+    @if (conflictedOperations()) {
+    <button type="button" (click)="reapplyConflictedChanges()">
+      Reapply my changes
+    </button>
+    <button type="button" (click)="discardConflictedChanges()">
+      Discard my changes
+    </button>
+    }
+  </div>
   } @if (isLoading()) {
   <div class="board-loading" role="status">Loading board…</div>
   } @else {

@@ -5,6 +5,7 @@ import {
   Board,
   BoardElement,
   BoardElementChanges,
+  BoardElementOperation,
   BoardGrant,
   NewBoardElement,
   BoardNote,
@@ -33,10 +34,14 @@ export class Boards {
     }>(`${this.apiUrl}/boards/${encodeURIComponent(id)}`);
   }
 
-  updateTitle(id: string, title: string): Observable<{ board: Board }> {
+  updateTitle(
+    id: string,
+    title: string,
+    expectedTitle: string,
+  ): Observable<{ board: Board }> {
     return this.http.patch<{ board: Board }>(
       `${this.apiUrl}/boards/${encodeURIComponent(id)}`,
-      { title },
+      { title, expectedTitle },
     );
   }
 
@@ -94,6 +99,16 @@ export class Boards {
     return this.http.put<{ board: Board }>(
       `${this.apiUrl}/boards/${encodeURIComponent(boardId)}/elements`,
       { elements, expectedUpdatedAt },
+    );
+  }
+
+  applyElementOperations(
+    boardId: string,
+    operations: BoardElementOperation[],
+  ): Observable<{ board: Board }> {
+    return this.http.post<{ board: Board }>(
+      `${this.apiUrl}/boards/${encodeURIComponent(boardId)}/operations`,
+      { operations },
     );
   }
 

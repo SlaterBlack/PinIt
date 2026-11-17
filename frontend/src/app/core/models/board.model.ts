@@ -122,6 +122,11 @@ export interface BoardElementChanges {
   locked?: boolean;
 }
 
+export type BoardElementOperation =
+  | { type: "add"; element: BoardElement }
+  | { type: "update"; expected: BoardElement; element: BoardElement }
+  | { type: "delete"; expected: BoardElement };
+
 export interface Board {
   id: string;
   title: string;

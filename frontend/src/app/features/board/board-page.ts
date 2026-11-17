@@ -21,6 +21,7 @@ import {
   BoardPermission,
   BoardPoint,
   BoardShapeKind,
+  BoardElementOperation,
   NewBoardElement,
 } from "../../core/models/board.model";
 import { BoardLive } from "../../core/services/board-live";
@@ -129,8 +130,11 @@ export class BoardPage implements OnInit, OnDestroy {
   readonly isSample = this.boardId === "sample";
   readonly board = signal<Board | null>(null);
   readonly permission = signal<BoardPermission | null>(null);
-  readonly canEdit = computed(() =>
-    ["owner", "admin", "edit"].includes(this.permission() ?? ""),
+  readonly conflictedOperations = signal<BoardElementOperation[] | null>(null);
+  readonly canEdit = computed(
+    () =>
+      ["owner", "admin", "edit"].includes(this.permission() ?? "") &&
+      this.conflictedOperations() === null,
   );
   readonly titleDraft = signal("");
   readonly isLoading = signal(true);
@@ -471,7 +475,7 @@ export class BoardPage implements OnInit, OnDestroy {
     this.spaceHandActive.set(false);
   }
 
-  loadBoard(connectLive = false): void {
+  loadBoard(connectLive = false, messageAfterLoad?: string): void {
     if (this.hasLocalEdit || this.isSaving()) {
       this.refreshPending = true;
       return;
@@ -482,13 +486,13 @@ export class BoardPage implements OnInit, OnDestroy {
         this.permission.set(permission ?? null);
         this.titleDraft.set(board.title);
         this.isLoading.set(false);
-        this.errorMessage.set(null);
+        this.errorMessage.set(messageAfterLoad ?? null);
         if (connectLive && !this.stopLive) {
           this.stopLive = this.boardLive.connect(
             this.boardId,
             (updatedAt) => {
               const currentBoard = this.board();
-              if (this.isSaving() || currentBoard?.updatedAt === updatedAt) {
+              if (currentBoard?.updatedAt === updatedAt) {
                 return;
               }
               this.clearHistory();
@@ -539,7 +543,7 @@ export class BoardPage implements OnInit, OnDestroy {
     }
     this.isSaving.set(true);
     this.saveState.set("Saving…");
-    this.boardService.updateTitle(this.boardId, title).subscribe({
+    this.boardService.updateTitle(this.boardId, title, board.title).subscribe({
       next: ({ board: updatedBoard }) => {
         this.board.set(updatedBoard);
         this.titleDraft.set(updatedBoard.title);
@@ -553,7 +557,15 @@ export class BoardPage implements OnInit, OnDestroy {
         this.errorMessage.set(
           this.describeError(error, "Could not rename this board."),
         );
-        this.finishPendingRefresh();
+        if (error.status === 409) {
+          this.refreshPending = false;
+          this.loadBoard(
+            false,
+            "The board title changed elsewhere. The latest title was loaded; apply your rename again if needed.",
+          );
+        } else {
+          this.finishPendingRefresh();
+        }
       },
     });
   }
@@ -2650,17 +2662,19 @@ export class BoardPage implements OnInit, OnDestroy {
       this.finishPendingRefresh();
       return;
     }
+    const operations = this.createElementOperations(before, elements);
     this.hasLocalEdit = false;
     this.isSaving.set(true);
     this.saveState.set("Saving…");
     this.errorMessage.set(null);
     this.board.set({ ...board, elements });
     this.boardService
-      .replaceElements(this.boardId, elements, board.updatedAt)
+      .applyElementOperations(this.boardId, operations)
       .subscribe({
         next: ({ board: updatedBoard }) => {
           this.board.set(updatedBoard);
           this.isSaving.set(false);
+          this.conflictedOperations.set(null);
           this.saveState.set("Saved");
           if (onSuccess) {
             onSuccess();
@@ -2683,19 +2697,147 @@ export class BoardPage implements OnInit, OnDestroy {
           this.isSaving.set(false);
           this.saveState.set("Not saved");
           this.board.set({ ...board, elements: before });
-          this.errorMessage.set(
+          const message =
             error.status === 409
-              ? "The board changed elsewhere. Your change was not saved; the latest board is loading."
-              : this.describeError(error, "Could not save your board changes."),
-          );
+              ? "A board item changed elsewhere. Review the latest board, then reapply or discard your changes."
+              : this.describeError(error, "Could not save your board changes.");
+          this.errorMessage.set(message);
           if (error.status === 409) {
+            this.conflictedOperations.set(operations);
             this.refreshPending = false;
-            this.loadBoard();
+            this.loadBoard(false, message);
           } else {
             this.finishPendingRefresh();
           }
         },
       });
+  }
+
+  private createElementOperations(
+    before: BoardElement[],
+    after: BoardElement[],
+  ): BoardElementOperation[] {
+    const beforeById = new Map(before.map((element) => [element.id, element]));
+    const afterById = new Map(after.map((element) => [element.id, element]));
+    const operations: BoardElementOperation[] = [];
+
+    for (const element of before) {
+      const updated = afterById.get(element.id);
+      if (!updated) {
+        operations.push({ type: "delete", expected: element });
+      } else if (JSON.stringify(element) !== JSON.stringify(updated)) {
+        operations.push({
+          type: "update",
+          expected: element,
+          element: updated,
+        });
+      }
+    }
+    for (const element of after) {
+      if (!beforeById.has(element.id)) {
+        operations.push({ type: "add", element });
+      }
+    }
+    return operations;
+  }
+
+  reapplyConflictedChanges(): void {
+    const board = this.board();
+    const pending = this.conflictedOperations();
+    if (!board || !pending || this.isSaving()) return;
+
+    const currentById = new Map(
+      board.elements.map((element) => [element.id, element]),
+    );
+    const rebased: BoardElementOperation[] = [];
+    for (const operation of pending) {
+      if (operation.type === "add") {
+        const current = currentById.get(operation.element.id);
+        if (!current) {
+          rebased.push(operation);
+        } else if (
+          JSON.stringify(current) !== JSON.stringify(operation.element)
+        ) {
+          this.errorMessage.set(
+            "A new board item conflicts with an existing item. Discard these changes and try again.",
+          );
+          return;
+        }
+      } else {
+        const current = currentById.get(operation.expected.id);
+        if (operation.type === "delete") {
+          if (current) rebased.push({ type: "delete", expected: current });
+        } else if (current) {
+          rebased.push({
+            type: "update",
+            expected: current,
+            element: operation.element,
+          });
+        } else {
+          rebased.push({ type: "add", element: operation.element });
+        }
+      }
+    }
+
+    if (rebased.length === 0) {
+      this.conflictedOperations.set(null);
+      this.errorMessage.set("Your changes are already present on the board.");
+      return;
+    }
+    const finalIds = new Set(board.elements.map((element) => element.id));
+    for (const operation of rebased) {
+      if (operation.type === "delete") {
+        finalIds.delete(operation.expected.id);
+      } else if (operation.type === "add") {
+        finalIds.add(operation.element.id);
+      }
+    }
+    const effectiveOperations = rebased.map((operation) => {
+      if (
+        (operation.type !== "add" && operation.type !== "update") ||
+        operation.element.type !== "line"
+      ) {
+        return operation;
+      }
+      return {
+        ...operation,
+        element: {
+          ...operation.element,
+          startElementId:
+            operation.element.startElementId &&
+            !finalIds.has(operation.element.startElementId)
+              ? null
+              : operation.element.startElementId,
+          endElementId:
+            operation.element.endElementId &&
+            !finalIds.has(operation.element.endElementId)
+              ? null
+              : operation.element.endElementId,
+        },
+      };
+    });
+    const rebasedById = new Map(
+      effectiveOperations.map((operation) => [
+        operation.type === "add" ? operation.element.id : operation.expected.id,
+        operation,
+      ]),
+    );
+    const elements = board.elements.flatMap((element) => {
+      const operation = rebasedById.get(element.id);
+      if (!operation || operation.type === "add") return [element];
+      if (operation.type === "delete") return [];
+      return [operation.element];
+    });
+    for (const operation of effectiveOperations) {
+      if (operation.type === "add") elements.push(operation.element);
+    }
+    this.errorMessage.set(null);
+    this.saveElements(elements, this.cloneElements(board.elements));
+  }
+
+  discardConflictedChanges(): void {
+    this.conflictedOperations.set(null);
+    this.errorMessage.set(null);
   }
 
   private cloneElements(elements: BoardElement[]): BoardElement[] {

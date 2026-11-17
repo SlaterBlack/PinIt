@@ -149,6 +149,50 @@ describe("Boards", () => {
     request.flush({ board: { id: "board-id", elements: [] } });
   });
 
+  it("applies item operations without replacing unrelated board items", () => {
+    const operation = {
+      type: "update" as const,
+      expected: {
+        id: "item-id",
+        type: "note" as const,
+        x: 10,
+        y: 20,
+        text: "Idea",
+        color: "rose" as const,
+      },
+      element: {
+        id: "item-id",
+        type: "note" as const,
+        x: 15,
+        y: 20,
+        text: "Idea",
+        color: "rose" as const,
+      },
+    };
+    service.applyElementOperations("board-id", [operation]).subscribe();
+
+    const request = httpMock.expectOne({
+      method: "POST",
+      url: "/api/pinit/boards/board-id/operations",
+    });
+    expect(request.request.body).toEqual({ operations: [operation] });
+    request.flush({ board: { id: "board-id", elements: [] } });
+  });
+
+  it("includes the expected current title when renaming a board", () => {
+    service.updateTitle("board-id", "New title", "Old title").subscribe();
+
+    const request = httpMock.expectOne({
+      method: "PATCH",
+      url: "/api/pinit/boards/board-id",
+    });
+    expect(request.request.body).toEqual({
+      title: "New title",
+      expectedTitle: "Old title",
+    });
+    request.flush({ board: { id: "board-id", title: "New title" } });
+  });
+
   it("saves admin-controlled demo board access", () => {
     service.setDemoAccess("board-id", "demo-user-id", "edit").subscribe();
 

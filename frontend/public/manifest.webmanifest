@@ -1,0 +1,16 @@
+{
+  "name": "PinIT",
+  "short_name": "PinIT",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5ebd8",
+  "theme_color": "#c08085",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

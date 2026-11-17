@@ -1,0 +1,60 @@
+<main class="login-page" [class.retro]="appearance.theme() === 'retro'">
+  <button
+    class="theme-toggle"
+    type="button"
+    [attr.aria-label]="appearance.theme() === 'retro' ? 'Switch to standard theme' : 'Switch to retro theme'"
+    (click)="appearance.toggleTheme()"
+  >
+    {{ appearance.theme() === 'retro' ? 'Standard theme' : 'Retro theme' }}
+  </button>
+
+  <section class="login-card card" aria-labelledby="login-title">
+    <a class="brand-lockup" routerLink="/login" aria-label="PinIT sign in">
+      <span class="brand-mark" aria-hidden="true">P</span>
+      <span>Pin<span class="brand-accent">IT</span></span>
+    </a>
+    <p class="eyebrow">A space for ideas</p>
+    <h1 id="login-title">Sign in to PinIT</h1>
+    <p class="login-description">
+      Bring your team's thoughts together on one visual board.
+    </p>
+
+    @if (sessionMessage) {
+    <p class="login-notice" role="status">{{ sessionMessage }}</p>
+    } @if (errorMessage()) {
+    <p class="login-error" role="alert">{{ errorMessage() }}</p>
+    }
+
+    <form (ngSubmit)="submit()">
+      <label class="form-field">
+        Email
+        <input
+          type="email"
+          name="email"
+          [(ngModel)]="email"
+          autocomplete="username"
+          required
+        />
+      </label>
+      <label class="form-field">
+        Password
+        <input
+          type="password"
+          name="password"
+          [(ngModel)]="password"
+          autocomplete="current-password"
+          required
+        />
+      </label>
+      <button
+        class="btn btn-primary login-submit"
+        type="submit"
+        [disabled]="isSubmitting()"
+      >
+        {{ isSubmitting() ? 'Signing in…' : 'Sign in' }}
+      </button>
+    </form>
+
+    <p class="login-footnote">Use your shared account to access PinIT.</p>
+  </section>
+</main>

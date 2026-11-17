@@ -1,0 +1,129 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.app-header {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: var(--space-xl);
+  padding: 0 clamp(var(--space-md), 4vw, 3rem);
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 94%,
+    var(--color-secondary)
+  );
+  box-shadow: 0 4px 18px rgb(85 51 55 / 6%);
+  backdrop-filter: blur(12px);
+}
+
+.navbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-primary-dark);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  text-decoration: none;
+}
+
+.brand-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--color-primary);
+  color: var(--color-contrast);
+}
+
+.brand-accent {
+  color: var(--color-accent);
+}
+
+.navbar-links {
+  display: flex;
+  flex: 1;
+  align-items: center;
+
+  a {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    font-size: 0.925rem;
+    font-weight: 500;
+    text-decoration: none;
+
+    &.is-active {
+      background: var(--color-primary-light);
+      color: var(--color-primary-dark);
+      font-weight: 600;
+    }
+  }
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.user-name {
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-button {
+  min-height: 36px;
+}
+
+.theme-sync-error {
+  margin: var(--space-sm) clamp(var(--space-md), 4vw, 3rem) 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--color-danger) 35%, transparent);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-light);
+  color: var(--color-danger);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 700px) {
+  .app-header {
+    flex-wrap: wrap;
+    gap: var(--space-sm) var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+  }
+
+  .navbar-links {
+    order: 3;
+    flex-basis: 100%;
+    border-top: 1px solid var(--color-border);
+
+    a {
+      flex: 1;
+      justify-content: center;
+    }
+  }
+
+  .header-actions {
+    margin-left: auto;
+  }
+
+  .user-name {
+    display: none;
+  }
+}

@@ -1,0 +1,42 @@
+<header class="app-header">
+  <a class="navbar-brand" routerLink="/boards" aria-label="PinIT boards">
+    <span class="brand-mark" aria-hidden="true">P</span>
+    <span>Pin<span class="brand-accent">IT</span></span>
+  </a>
+
+  <nav class="navbar-links" aria-label="Main navigation">
+    <a
+      routerLink="/boards"
+      routerLinkActive="is-active"
+      ariaCurrentWhenActive="page"
+      >Boards</a
+    >
+  </nav>
+
+  <div class="header-actions">
+    <button
+      class="theme-toggle"
+      type="button"
+      [attr.aria-label]="appearance.theme() === 'retro' ? 'Switch to standard theme' : 'Switch to retro theme'"
+      (click)="appearance.toggleTheme()"
+    >
+      {{ appearance.theme() === 'retro' ? 'Standard theme' : 'Retro theme' }}
+    </button>
+    @if (auth.currentUser(); as user) {
+    <span class="user-name">{{ user.name }}</span>
+    }
+    <button
+      class="btn btn-secondary logout-button"
+      type="button"
+      (click)="logout()"
+    >
+      Sign out
+    </button>
+  </div>
+</header>
+
+@if (appearance.themeSyncError(); as themeError) {
+<p class="theme-sync-error" role="status">{{ themeError }}</p>
+}
+
+<router-outlet />

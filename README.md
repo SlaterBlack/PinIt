@@ -13,17 +13,17 @@ cd frontend
 npm install
 ```
 
-Copy the example environment file and configure the shared StoreIt API URL:
+Copy the example environment file and replace every placeholder with values
+for the machine running PinIT:
 
 ```bash
-cp .env.example .env
+cd frontend && cp -n .env.example .env
 ```
 
-The default `STOREIT_API_URL` (`http://127.0.0.1:4002`) matches the other
-services. Change it in `frontend/.env` if StoreIt uses a different address.
+`frontend/.env` is ignored by Git. It contains the StoreIt API URL, frontend
+bind address and port, Nginx hostname, and systemd service account and path.
 The development and production servers load this file and proxy `/api`
-requests to StoreIt. `FRONTEND_HOST` and `FRONTEND_PORT` configure the
-production frontend server; the default production port is `2403`.
+requests to StoreIt.
 
 Start the development server:
 
@@ -43,7 +43,16 @@ npm run lint
 
 The production Angular output is written to `frontend/dist/pinit/browser`.
 `npm run serve` hosts that build and proxies `/api`; build first and configure
-`STOREIT_API_URL` before using it.
+`frontend/.env` before using it.
+
+## Production hosting
+
+The production frontend server listens on `FRONTEND_HOST` and `FRONTEND_PORT`
+from the local `.env`. Configure the machine's Nginx virtual host to proxy
+public traffic to that address. Keep the Nginx site and TLS certificate
+configuration on the server, not in this repository; use the local
+`NGINX_SERVER_NAME` setting for the virtual host. The server process can run
+under systemd using `APP_DIRECTORY`, `APP_USER`, and `APP_GROUP` from `.env`.
 
 ## Scaffold status
 

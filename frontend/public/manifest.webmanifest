@@ -1,9 +1,9 @@
 {
-  "name": "PinIT",
-  "short_name": "PinIT",
+  "name": "PinIt",
+  "short_name": "PinIt",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f5ebd8",
+  "background_color": "#faf4e9",
   "theme_color": "#c08085",
   "icons": [
     {

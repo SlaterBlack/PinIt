@@ -33,9 +33,9 @@ describe("Shell", () => {
     httpTestingController.verify();
   });
 
-  it("loads other configured services and hides PinIT from its own menu", () => {
+  it("loads other configured services and hides PinIt from its own menu", () => {
     const switcher = fixture.nativeElement.querySelector(
-      'button[aria-label="PinIT, switch service"]',
+      'button[aria-label="PinIt, switch service"]',
     ) as HTMLButtonElement;
     switcher.click();
     fixture.detectChanges();
@@ -45,7 +45,7 @@ describe("Shell", () => {
       services: [
         {
           id: "pinit",
-          name: "PinIT",
+          name: "PinIt",
           url: "https://pinit.example.com/",
           logoUrl: "https://pinit.example.com/PinIt_32.png",
         },

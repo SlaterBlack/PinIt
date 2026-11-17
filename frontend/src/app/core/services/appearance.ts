@@ -21,7 +21,7 @@ function readTheme(): UserTheme {
     return storedTheme;
   }
 
-  console.error("Stored PinIT theme is unsupported; resetting to Default.");
+  console.error("Stored PinIt theme is unsupported; resetting to Default.");
   localStorage.removeItem(THEME_STORAGE_KEY);
   return DEFAULT_THEME;
 }
@@ -106,7 +106,7 @@ export class Appearance {
         }
       },
       error: (error: unknown) => {
-        console.error("Could not save the PinIT theme to the account.", error);
+        console.error("Could not save the PinIt theme to the account.", error);
         if (this.queuedTheme) {
           this.saveQueuedTheme();
         } else {

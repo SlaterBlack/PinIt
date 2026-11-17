@@ -1,6 +1,6 @@
-# PinIT
+# PinIt
 
-PinIT is an Angular app scaffold for visual collaboration and digital
+PinIt is an Angular app scaffold for visual collaboration and digital
 whiteboards, inspired by Miro. Its cream and dusty-rose palette supports both
 the standard and retro themes used across the related applications.
 
@@ -14,7 +14,7 @@ npm install
 ```
 
 Copy the example environment file and replace every placeholder with values
-for the machine running PinIT:
+for the machine running PinIt:
 
 ```bash
 cd frontend && cp -n .env.example .env

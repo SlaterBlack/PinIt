@@ -19,9 +19,7 @@ export class Auth {
     this.readStoredUser(),
   );
   readonly currentUser = this.currentUserSignal.asReadonly();
-  readonly isAdmin = computed(
-    () => this.currentUserSignal()?.role === "admin",
-  );
+  readonly isAdmin = computed(() => this.currentUserSignal()?.role === "admin");
   private readonly accountThemeSignal = signal<UserTheme | null>(null);
   readonly accountTheme = this.accountThemeSignal.asReadonly();
   private readonly accountThemeLoadedSignal = signal(false);
@@ -116,7 +114,7 @@ export class Auth {
 
       throw new Error("Stored user profile is invalid.");
     } catch (error: unknown) {
-      console.error("Could not restore the saved PinIT user profile:", error);
+      console.error("Could not restore the saved PinIt user profile:", error);
       localStorage.removeItem(USER_STORAGE_KEY);
       return null;
     }

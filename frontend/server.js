@@ -45,7 +45,7 @@ if (!["http:", "https:"].includes(targetUrl.protocol)) {
 }
 if (!fs.existsSync(INDEX_PATH)) {
   throw new Error(
-    "PinIT production build not found. Run npm run build before npm run serve.",
+    "PinIt production build not found. Run npm run build before npm run serve.",
   );
 }
 
@@ -74,6 +74,6 @@ app.get(/.*/, (_req, res) => {
 
 app.listen(PORT, HOST, () => {
   console.log(
-    `PinIT frontend listening on http://${HOST}:${PORT}, proxying /api to ${API_TARGET}`,
+    `PinIt frontend listening on http://${HOST}:${PORT}, proxying /api to ${API_TARGET}`,
   );
 });

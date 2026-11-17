@@ -34,7 +34,7 @@ export class Profile implements OnInit {
     this.auth.fetchCurrentUser().subscribe({
       next: ({ user: loadedUser }) => this.setProfile(loadedUser),
       error: (error: unknown) => {
-        console.error("Could not load PinIT account details.", error);
+        console.error("Could not load PinIt account details.", error);
         this.errorMessage.set(
           "Could not load your account details. Try refreshing the page.",
         );

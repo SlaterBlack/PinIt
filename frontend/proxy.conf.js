@@ -2,14 +2,17 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const envPath = path.join(__dirname, ".env");
-if (fs.existsSync(envPath)) {
-  process.loadEnvFile(envPath);
+if (!fs.existsSync(envPath)) {
+  throw new Error(
+    "Missing frontend/.env. Copy .env.example to .env and set STOREIT_API_URL.",
+  );
 }
+process.loadEnvFile(envPath);
 
 const target = process.env.STOREIT_API_URL?.trim();
 if (!target) {
   throw new Error(
-    "STOREIT_API_URL must be set in frontend/.env or the process environment.",
+    "STOREIT_API_URL must be set in frontend/.env.",
   );
 }
 

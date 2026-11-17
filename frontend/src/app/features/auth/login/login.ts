@@ -4,7 +4,6 @@ import { HttpErrorResponse } from "@angular/common/http";
 import { Component, inject, signal } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { ActivatedRoute, Router, RouterLink } from "@angular/router";
-import { Appearance } from "../../../core/services/appearance";
 import { Auth } from "../../../core/services/auth";
 
 export function getSafeReturnUrl(returnUrl: string | null): string {
@@ -23,7 +22,6 @@ export function getSafeReturnUrl(returnUrl: string | null): string {
 })
 export class Login {
   private readonly auth = inject(Auth);
-  readonly appearance = inject(Appearance);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 

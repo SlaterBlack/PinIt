@@ -13,9 +13,17 @@ cd frontend
 npm install
 ```
 
-Set `STOREIT_API_URL` in `frontend/.env` to the shared account API base URL for
-your environment. `frontend/.env.example` contains a placeholder to replace.
-The development and production servers proxy `/api` requests to this service.
+Copy the example environment file and configure the shared StoreIt API URL:
+
+```bash
+cp .env.example .env
+```
+
+The default `STOREIT_API_URL` (`http://127.0.0.1:4002`) matches the other
+services. Change it in `frontend/.env` if StoreIt uses a different address.
+The development and production servers load this file and proxy `/api`
+requests to StoreIt. `FRONTEND_HOST` and `FRONTEND_PORT` configure the
+production frontend server; the default production port is `2403`.
 
 Start the development server:
 

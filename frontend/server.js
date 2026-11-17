@@ -8,8 +8,8 @@ if (fs.existsSync(envPath)) {
   process.loadEnvFile(envPath);
 }
 
-const HOST = process.env.FRONTEND_HOST?.trim() || "0.0.0.0";
-const PORT = Number(process.env.FRONTEND_PORT ?? 4200);
+const HOST = process.env.FRONTEND_HOST?.trim() || "127.0.0.1";
+const PORT = Number(process.env.FRONTEND_PORT ?? 2403);
 const API_TARGET = process.env.STOREIT_API_URL?.trim();
 const BROWSER_DIR = path.join(__dirname, "dist", "pinit", "browser");
 const INDEX_PATH = path.join(BROWSER_DIR, "index.html");

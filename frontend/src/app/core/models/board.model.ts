@@ -12,6 +12,7 @@ interface BoardElementBase {
   id: string;
   x: number;
   y: number;
+  locked?: boolean;
 }
 
 export interface BoardNote extends BoardElementBase {
@@ -118,6 +119,7 @@ export interface BoardElementChanges {
   startElementId?: string | null;
   endElementId?: string | null;
   autoWidth?: boolean;
+  locked?: boolean;
 }
 
 export interface Board {

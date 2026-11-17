@@ -55,6 +55,7 @@ interface ElementDrag {
   clientX: number;
   clientY: number;
   before: BoardElement[];
+  saveBefore: BoardElement[];
 }
 
 interface CanvasPan {
@@ -83,6 +84,28 @@ interface ContextMenuState {
   targetId: string | null;
 }
 
+interface DuplicateMemory {
+  latestIds: string[];
+  positions: Record<string, BoardPoint>;
+  offset: BoardPoint;
+}
+
+interface AlignmentGuides {
+  vertical: number[];
+  horizontal: number[];
+}
+
+type PaletteCommandId =
+  | BoardTool
+  | "undo"
+  | "redo"
+  | "duplicate"
+  | "tidy"
+  | "fit-board"
+  | "fit-selection"
+  | "lock"
+  | "delete";
+
 const sceneWidth = 2400;
 const sceneHeight = 1600;
 const maxHistoryEntries = 50;
@@ -99,6 +122,8 @@ export class BoardPage implements OnInit, OnDestroy {
   private readonly boardService = inject(Boards);
   private readonly boardLive = inject(BoardLive);
   @ViewChild("canvas") private canvas?: ElementRef<HTMLElement>;
+  @ViewChild("commandInput")
+  private commandInput?: ElementRef<HTMLInputElement>;
 
   readonly boardId = this.route.snapshot.paramMap.get("boardId") ?? "";
   readonly isSample = this.boardId === "sample";
@@ -135,6 +160,12 @@ export class BoardPage implements OnInit, OnDestroy {
     null,
   );
   readonly contextMenu = signal<ContextMenuState | null>(null);
+  readonly alignmentGuides = signal<AlignmentGuides>({
+    vertical: [],
+    horizontal: [],
+  });
+  readonly paletteOpen = signal(false);
+  readonly paletteQuery = signal("");
   readonly canvasPanning = signal(false);
   readonly draggingElementId = signal<string | null>(null);
   readonly inputMode = signal<"mouse" | "trackpad">("mouse");
@@ -183,6 +214,35 @@ export class BoardPage implements OnInit, OnDestroy {
     { id: "arrow", label: "Arrow", icon: "➜" },
   ];
   readonly colorOptions: NoteColor[] = ["cream", "rose", "sage", "sky"];
+  readonly connectionDirections: {
+    id: "up" | "right" | "down" | "left";
+    icon: string;
+  }[] = [
+    { id: "up", icon: "●" },
+    { id: "right", icon: "●" },
+    { id: "down", icon: "●" },
+    { id: "left", icon: "●" },
+  ];
+  readonly paletteCommands: { id: PaletteCommandId; label: string }[] = [
+    ...this.tools.map((tool) => ({
+      id: tool.id,
+      label: tool.label.replace(/\s+\(.+\)$/, ""),
+    })),
+    { id: "undo", label: "Undo" },
+    { id: "redo", label: "Redo" },
+    { id: "duplicate", label: "Duplicate selection" },
+    { id: "tidy", label: "Tidy up selection" },
+    { id: "fit-board", label: "Fit board to screen" },
+    { id: "fit-selection", label: "Zoom to selection" },
+    { id: "lock", label: "Lock or unlock selection" },
+    { id: "delete", label: "Delete selection" },
+  ];
+  readonly matchingPaletteCommands = computed(() => {
+    const query = this.paletteQuery().trim().toLowerCase();
+    return this.paletteCommands.filter((command) =>
+      command.label.toLowerCase().includes(query),
+    );
+  });
 
   private stopLive: (() => void) | null = null;
   private hasLocalEdit = false;
@@ -196,8 +256,11 @@ export class BoardPage implements OnInit, OnDestroy {
   private pendingElementClickId: string | undefined;
   private spaceDown = false;
   private textEditBefore: BoardElement[] | undefined;
+  private pendingFocusElementId: string | undefined;
   private readonly undoStack: ElementHistory[] = [];
   private readonly redoStack: ElementHistory[] = [];
+  private duplicateMemory: DuplicateMemory | undefined;
+  private lastPointerPoint: BoardPoint = { x: 50, y: 50 };
 
   ngOnInit(): void {
     if (this.isSample) {
@@ -216,10 +279,95 @@ export class BoardPage implements OnInit, OnDestroy {
     const target = event.target;
     const editingField =
       target instanceof HTMLElement &&
-      !!target.closest("input, textarea, [contenteditable='true']");
+      !!target.closest(
+        "input:not([readonly]), textarea:not([readonly]), select, [contenteditable='true'], [role='textbox']",
+      );
     const focusedControl =
       target instanceof HTMLElement &&
       !!target.closest("button, select, [role='button']");
+
+    if (this.paletteOpen()) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeCommandPalette();
+      }
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      this.openCommandPalette();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (this.editingElementId()) {
+        if (target instanceof HTMLElement) {
+          target.blur();
+        } else {
+          this.saveTextEdit();
+        }
+        return;
+      }
+      if (this.selectedTool() !== "select") {
+        this.cancelGesture();
+        this.setTool("select");
+        return;
+      }
+      this.cancelGesture();
+      this.setSelection([]);
+      this.contextMenu.set(null);
+      return;
+    }
+    if (
+      event.code === "Digit1" &&
+      (event.shiftKey || event.altKey) &&
+      !editingField
+    ) {
+      event.preventDefault();
+      this.fitBoardToScreen();
+      return;
+    }
+    if (event.code === "Digit2" && event.shiftKey && !editingField) {
+      event.preventDefault();
+      this.zoomToSelection();
+      return;
+    }
+    const modifier = event.ctrlKey || event.metaKey;
+    if (
+      modifier &&
+      event.shiftKey &&
+      event.key.toLowerCase() === "l" &&
+      !editingField
+    ) {
+      event.preventDefault();
+      this.toggleSelectionLock();
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === "z" && !editingField) {
+      event.preventDefault();
+      if (event.shiftKey) this.redo();
+      else this.undo();
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === "y" && !editingField) {
+      event.preventDefault();
+      this.redo();
+      return;
+    }
+    if (modifier && event.key.toLowerCase() === "d" && !editingField) {
+      event.preventDefault();
+      this.duplicateSelection();
+      return;
+    }
+    if (
+      !editingField &&
+      (event.key === "Delete" || event.key === "Backspace") &&
+      this.selectedElementIds().length > 0
+    ) {
+      event.preventDefault();
+      this.deleteSelection();
+      return;
+    }
     if (event.code === "Space" && !editingField && !focusedControl) {
       event.preventDefault();
       this.spaceDown = true;
@@ -244,11 +392,6 @@ export class BoardPage implements OnInit, OnDestroy {
     if (shortcut) {
       event.preventDefault();
       this.setTool(shortcut);
-    } else if (event.key === "Escape") {
-      this.cancelGesture();
-      this.setTool("select");
-      this.editingElementId.set(null);
-      this.contextMenu.set(null);
     }
   }
 
@@ -258,6 +401,68 @@ export class BoardPage implements OnInit, OnDestroy {
       this.spaceDown = false;
       this.spaceHandActive.set(false);
     }
+  }
+
+  @HostListener("document:copy", ["$event"])
+  onDocumentCopy(event: ClipboardEvent): void {
+    if (this.isTypingTarget(event.target)) return;
+    const elements = this.selectedElements();
+    if (!elements.length || !event.clipboardData) return;
+    event.preventDefault();
+    event.clipboardData.setData(
+      "text/plain",
+      JSON.stringify({ format: "pinit-elements-v1", elements }),
+    );
+  }
+
+  @HostListener("document:cut", ["$event"])
+  onDocumentCut(event: ClipboardEvent): void {
+    if (this.isTypingTarget(event.target)) return;
+    this.onDocumentCopy(event);
+    if (event.defaultPrevented) this.deleteSelection();
+  }
+
+  @HostListener("document:paste", ["$event"])
+  onDocumentPaste(event: ClipboardEvent): void {
+    if (
+      this.isTypingTarget(event.target) ||
+      !this.canEdit() ||
+      this.isSample ||
+      this.isSaving() ||
+      !event.clipboardData
+    ) {
+      return;
+    }
+    const customData = event.clipboardData.getData(
+      "application/x-pinit-elements",
+    );
+    const plainText = event.clipboardData.getData("text/plain");
+    const clipboardText = customData || plainText;
+    const copiedElements = this.parseClipboardElements(clipboardText);
+    if (copiedElements) {
+      event.preventDefault();
+      this.pasteElements(copiedElements);
+      return;
+    }
+    if (clipboardText.trimStart().startsWith('{"format":"pinit-elements-')) {
+      event.preventDefault();
+      this.errorMessage.set("The copied PinIt items are invalid.");
+      return;
+    }
+    if (!clipboardText) return;
+    const rows = clipboardText.replace(/\r/g, "").split("\n");
+    if (rows.at(-1) === "") rows.pop();
+    const grid = rows.map((row) => row.split("\t"));
+    const cells = grid.flat();
+    if (
+      cells.length === 1 &&
+      !clipboardText.includes("\t") &&
+      !clipboardText.includes("\n")
+    ) {
+      grid[0][0] = clipboardText;
+    }
+    event.preventDefault();
+    this.pasteGrid(grid);
   }
 
   @HostListener("window:blur")
@@ -416,7 +621,8 @@ export class BoardPage implements OnInit, OnDestroy {
     if (
       !this.canEdit() ||
       this.isSaving() ||
-      this.selectedTool() !== "select"
+      this.selectedTool() !== "select" ||
+      element.locked
     ) {
       return;
     }
@@ -430,6 +636,112 @@ export class BoardPage implements OnInit, OnDestroy {
     ) {
       this.setSelection([element.id]);
       this.focusEditableElement(element.id);
+    }
+  }
+
+  spawnNextSticky(id: string, event: KeyboardEvent): void {
+    if (
+      event.key !== "Tab" ||
+      this.editingElementId() !== id ||
+      !this.canEdit() ||
+      this.isSaving()
+    ) {
+      return;
+    }
+    const note = this.board()?.elements.find(
+      (element): element is Extract<BoardElement, { type: "note" }> =>
+        element.id === id && element.type === "note",
+    );
+    if (!note) return;
+    event.preventDefault();
+    this.textEditBefore = undefined;
+    this.editingElementId.set(null);
+    (event.currentTarget as HTMLTextAreaElement).blur();
+    const x = note.x + (note.width ?? 10) + 2;
+    const y = note.y + (note.height ?? 15) + 2;
+    const next = this.createElement(
+      "note",
+      x + 10 <= 100 ? x : note.x,
+      x + 10 <= 100 ? note.y : Math.min(y, 85),
+    );
+    this.addElements([next], "note");
+  }
+
+  createConnectedElement(
+    source: BoardElement,
+    direction: "up" | "right" | "down" | "left",
+  ): void {
+    if (!this.canEdit() || this.isSaving() || source.locked) return;
+    const sourceWidth = this.itemWidth(source);
+    const sourceHeight = this.itemHeight(source) ?? 10;
+    const newTool: PlacementTool =
+      source.type === "shape"
+        ? "shape"
+        : source.type === "card"
+          ? "card"
+          : "note";
+    const newSize =
+      newTool === "shape"
+        ? { width: 12, height: 10 }
+        : newTool === "card"
+          ? { width: 20, height: 16 }
+          : { width: 10, height: 15 };
+    const x =
+      direction === "left"
+        ? source.x - newSize.width - 3
+        : direction === "right"
+          ? source.x + sourceWidth + 3
+          : source.x + (sourceWidth - newSize.width) / 2;
+    const y =
+      direction === "up"
+        ? source.y - newSize.height - 3
+        : direction === "down"
+          ? source.y + sourceHeight + 3
+          : source.y + (sourceHeight - newSize.height) / 2;
+    const child = this.createElement(
+      newTool,
+      this.clampCoordinate(x),
+      this.clampCoordinate(y),
+    );
+    const childElement =
+      child.type === "note"
+        ? { ...child, width: newSize.width, height: newSize.height }
+        : child.type === "shape" || child.type === "card"
+          ? { ...child, width: newSize.width, height: newSize.height }
+          : child;
+    const sourceCenter = {
+      x: source.x + sourceWidth / 2,
+      y: source.y + sourceHeight / 2,
+    };
+    const childCenter = {
+      x: childElement.x + newSize.width / 2,
+      y: childElement.y + newSize.height / 2,
+    };
+    const line: BoardElement = {
+      id: crypto.randomUUID(),
+      type: "line",
+      x: this.edgePoint(source, childCenter).x,
+      y: this.edgePoint(source, childCenter).y,
+      endX: this.edgePoint(childElement, sourceCenter).x,
+      endY: this.edgePoint(childElement, sourceCenter).y,
+      startElementId: source.id,
+      endElementId: childElement.id,
+      color:
+        "color" in source && this.isNoteColor(source.color)
+          ? source.color
+          : "rose",
+      strokeWidth: 2,
+    };
+    const board = this.board();
+    if (!board || board.elements.length + 2 > 500) {
+      this.errorMessage.set("This board can hold at most 500 items.");
+      return;
+    }
+    const before = this.cloneElements(board.elements);
+    this.saveElements([...board.elements, childElement, line], before);
+    this.setSelection([childElement.id]);
+    if (childElement.type === "note") {
+      this.focusEditableElement(childElement.id);
     }
   }
 
@@ -460,7 +772,7 @@ export class BoardPage implements OnInit, OnDestroy {
     const ids = new Set(this.selectedElementIds());
     const before = this.cloneElements(board.elements);
     const elements = board.elements.map((element) =>
-      ids.has(element.id) && "color" in element
+      ids.has(element.id) && !element.locked && "color" in element
         ? { ...element, color }
         : element,
     );
@@ -473,20 +785,281 @@ export class BoardPage implements OnInit, OnDestroy {
     if (targetId) this.removeElement(targetId);
   }
 
+  contextTargetLocked(): boolean {
+    const targetId = this.contextMenu()?.targetId;
+    return (
+      this.board()?.elements.find((element) => element.id === targetId)
+        ?.locked ?? false
+    );
+  }
+
+  contextToggleLock(): void {
+    const targetId = this.contextMenu()?.targetId;
+    this.contextMenu.set(null);
+    if (!targetId) return;
+    this.setSelection([targetId]);
+    this.toggleSelectionLock();
+  }
+
   resetView(): void {
     this.viewport.set({ x: 0, y: 0, zoom: 1 });
     this.contextMenu.set(null);
+  }
+
+  openCommandPalette(): void {
+    this.paletteQuery.set("");
+    this.paletteOpen.set(true);
+    this.setTimeout(() => this.commandInput?.nativeElement.focus());
+  }
+
+  closeCommandPalette(): void {
+    this.paletteOpen.set(false);
+    this.paletteQuery.set("");
+  }
+
+  executePaletteCommand(command: PaletteCommandId): void {
+    this.closeCommandPalette();
+    const tool = this.tools.find((candidate) => candidate.id === command);
+    if (tool) {
+      this.setTool(tool.id);
+      return;
+    }
+    switch (command) {
+      case "undo":
+        this.undo();
+        break;
+      case "redo":
+        this.redo();
+        break;
+      case "duplicate":
+        this.duplicateSelection();
+        break;
+      case "tidy":
+        this.tidySelection();
+        break;
+      case "fit-board":
+        this.fitBoardToScreen();
+        break;
+      case "fit-selection":
+        this.zoomToSelection();
+        break;
+      case "lock":
+        this.toggleSelectionLock();
+        break;
+      case "delete":
+        this.deleteSelection();
+        break;
+    }
+  }
+
+  executeFirstPaletteCommand(event: Event): void {
+    event.preventDefault();
+    const command = this.matchingPaletteCommands()[0];
+    if (command) this.executePaletteCommand(command.id);
+  }
+
+  fitBoardToScreen(): void {
+    this.fitElementsToScreen(this.board()?.elements ?? []);
+  }
+
+  zoomToSelection(): void {
+    this.fitElementsToScreen(this.selectedElements());
+  }
+
+  toggleSelectionLock(): void {
+    if (!this.canEdit() || this.isSaving()) return;
+    const board = this.board();
+    const selected = this.selectedElements();
+    if (!board || !selected.length) return;
+    const ids = new Set(selected.map((element) => element.id));
+    const shouldLock = selected.some((element) => !element.locked);
+    const before = this.cloneElements(board.elements);
+    const elements = board.elements.map((element) =>
+      ids.has(element.id) ? { ...element, locked: shouldLock } : element,
+    );
+    this.saveElements(elements, before);
+  }
+
+  tidySelection(): void {
+    if (!this.canEdit() || this.isSaving()) return;
+    const board = this.board();
+    const selected = this.selectedElements().filter(
+      (element) =>
+        !element.locked && element.type !== "line" && element.type !== "stroke",
+    );
+    if (!board || selected.length < 2) return;
+    const columns = Math.ceil(Math.sqrt(selected.length));
+    const rows = Math.ceil(selected.length / columns);
+    const columnWidths = Array.from({ length: columns }, (_, column) =>
+      Math.max(
+        ...selected
+          .filter((_, index) => index % columns === column)
+          .map((element) => this.itemWidth(element)),
+      ),
+    );
+    const rowHeights = Array.from({ length: rows }, (_, row) =>
+      Math.max(
+        ...selected
+          .slice(row * columns, (row + 1) * columns)
+          .map((element) => this.itemHeight(element) ?? 4),
+      ),
+    );
+    const anchorX = Math.min(...selected.map((element) => element.x));
+    const anchorY = Math.min(...selected.map((element) => element.y));
+    const positions = new Map<string, BoardPoint>();
+    let rowY = anchorY;
+    for (let row = 0; row < rows; row += 1) {
+      let columnX = anchorX;
+      for (let column = 0; column < columns; column += 1) {
+        const element = selected[row * columns + column];
+        if (!element) continue;
+        positions.set(element.id, {
+          x: this.clampCoordinate(columnX),
+          y: this.clampCoordinate(rowY),
+        });
+        columnX += (columnWidths[column] ?? 10) + 2;
+      }
+      rowY += (rowHeights[row] ?? 10) + 2;
+    }
+    const before = this.cloneElements(board.elements);
+    const beforeById = new Map(
+      board.elements.map((element) => [element.id, element]),
+    );
+    const elements = board.elements.map((element) => {
+      const position = positions.get(element.id);
+      if (position) return { ...element, ...position };
+      if (element.type !== "line") return element;
+      const start = positions.get(element.startElementId ?? "");
+      const end = positions.get(element.endElementId ?? "");
+      const original = beforeById.get(element.id);
+      if (!original || original.type !== "line" || (!start && !end)) {
+        return element;
+      }
+      const startElement = beforeById.get(element.startElementId ?? "");
+      const endElement = beforeById.get(element.endElementId ?? "");
+      return {
+        ...element,
+        x:
+          start && startElement
+            ? this.clampCoordinate(element.x + start.x - startElement.x)
+            : element.x,
+        y:
+          start && startElement
+            ? this.clampCoordinate(element.y + start.y - startElement.y)
+            : element.y,
+        endX:
+          end && endElement
+            ? this.clampCoordinate(element.endX + end.x - endElement.x)
+            : element.endX,
+        endY:
+          end && endElement
+            ? this.clampCoordinate(element.endY + end.y - endElement.y)
+            : element.endY,
+      };
+    });
+    this.saveElements(elements, before);
+  }
+
+  switchSelectedType(): void {
+    if (!this.canEdit() || this.isSaving()) return;
+    const board = this.board();
+    const selected = new Set(
+      this.selectedElements()
+        .filter((element) => !element.locked)
+        .map((element) => element.id),
+    );
+    if (!board || !selected.size) return;
+    const before = this.cloneElements(board.elements);
+    const elements = board.elements.map((element) =>
+      selected.has(element.id) ? this.convertElementType(element) : element,
+    );
+    if (this.sameElements(before, elements)) return;
+    this.saveElements(elements, before);
+  }
+
+  selectionHasLockedItems(): boolean {
+    const selected = this.selectedElements();
+    return selected.length > 0 && selected.every((element) => element.locked);
+  }
+
+  canSwitchSelectionType(): boolean {
+    const selected = this.selectedElements();
+    return (
+      selected.length > 0 &&
+      selected.every(
+        (element) =>
+          !element.locked &&
+          ["note", "text", "shape", "card"].includes(element.type),
+      )
+    );
   }
 
   deleteSelection(): void {
     if (!this.canEdit() || this.isSaving()) return;
     const board = this.board();
     if (!board) return;
-    const selected = new Set(this.selectedElementIds());
+    const selectedIds = new Set(this.selectedElementIds());
+    const selected = new Set(
+      board.elements
+        .filter((element) => selectedIds.has(element.id) && !element.locked)
+        .map((element) => element.id),
+    );
+    if (!selected.size) return;
     const elements = this.removeElements(board.elements, selected);
     if (elements.length === board.elements.length) return;
-    this.setSelection([]);
+    this.setSelection([...selectedIds].filter((id) => !selected.has(id)));
     this.saveElements(elements, this.cloneElements(board.elements));
+  }
+
+  duplicateSelection(): void {
+    if (!this.canEdit() || this.isSaving()) return;
+    const board = this.board();
+    const selected = this.selectedElements();
+    if (!board || !selected.length) return;
+    const sourceIds = new Set(selected.map((element) => element.id));
+    for (const element of selected) {
+      if (element.type === "frame") {
+        this.elementsInFrame(element, board.elements).forEach((id) =>
+          sourceIds.add(id),
+        );
+      }
+    }
+    const source = board.elements.filter((element) =>
+      sourceIds.has(element.id),
+    );
+    if (board.elements.length + source.length > 500) {
+      this.errorMessage.set("This board can hold at most 500 items.");
+      return;
+    }
+    let offset: BoardPoint = { x: 0, y: 0 };
+    const memory = this.duplicateMemory;
+    const selectedIds = this.selectedElementIds();
+    if (
+      memory &&
+      selectedIds.length === memory.latestIds.length &&
+      selectedIds.every((id, index) => id === memory.latestIds[index])
+    ) {
+      const current = source.find((element) => element.id === selectedIds[0]);
+      const initial = memory.positions[selectedIds[0] ?? ""];
+      if (current && initial) {
+        const moved = { x: current.x - initial.x, y: current.y - initial.y };
+        offset =
+          Math.abs(moved.x) + Math.abs(moved.y) > 0.05 ? moved : memory.offset;
+      } else {
+        offset = memory.offset;
+      }
+    }
+    const copies = this.cloneWithNewIds(source, offset);
+    const before = this.cloneElements(board.elements);
+    this.saveElements([...board.elements, ...copies], before);
+    this.setSelection(copies.map((element) => element.id));
+    this.duplicateMemory = {
+      latestIds: copies.map((element) => element.id),
+      positions: Object.fromEntries(
+        copies.map((element) => [element.id, { x: element.x, y: element.y }]),
+      ),
+      offset,
+    };
   }
 
   zoomCanvas(event: WheelEvent): void {
@@ -608,6 +1181,7 @@ export class BoardPage implements OnInit, OnDestroy {
         x: view.x + event.clientX - previous.clientX,
         y: view.y + event.clientY - previous.clientY,
       });
+      this.pointerToBoardPoint(event.clientX, event.clientY);
       this.canvasPan = {
         pointerId: event.pointerId,
         button: previous.button,
@@ -761,6 +1335,10 @@ export class BoardPage implements OnInit, OnDestroy {
   startElementDrag(element: BoardElement, event: PointerEvent): void {
     if (event.button === 2 || event.button === 1) return;
     if (!this.canEdit() || this.isSaving()) return;
+    if (element.locked && this.selectedTool() !== "line") {
+      event.stopPropagation();
+      return;
+    }
     if (this.selectedTool() === "comment" && element.type === "comment") {
       if (
         event.target instanceof HTMLElement &&
@@ -803,7 +1381,11 @@ export class BoardPage implements OnInit, OnDestroy {
       return;
     }
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest("textarea, input")) {
+    if (
+      target instanceof HTMLElement &&
+      target.closest("textarea, input") &&
+      this.editingElementId() === element.id
+    ) {
       event.stopPropagation();
       return;
     }
@@ -825,16 +1407,40 @@ export class BoardPage implements OnInit, OnDestroy {
           ? this.elementsInFrame(element, board.elements)
           : []),
       ]),
-    ];
+    ].filter(
+      (id) => !board.elements.find((candidate) => candidate.id === id)?.locked,
+    );
+    let before = this.cloneElements(board.elements);
+    const saveBefore = this.cloneElements(board.elements);
+    let movingIds = dragIds;
+    if (event.altKey) {
+      const sourceElements = board.elements.filter((candidate) =>
+        dragIds.includes(candidate.id),
+      );
+      const copies = this.cloneWithNewIds(sourceElements, { x: 0, y: 0 });
+      if (board.elements.length + copies.length > 500) {
+        this.errorMessage.set("This board can hold at most 500 items.");
+        return;
+      }
+      const copiedBoard = {
+        ...board,
+        elements: [...board.elements, ...copies],
+      };
+      this.board.set(copiedBoard);
+      this.setSelection(copies.map((copy) => copy.id));
+      movingIds = copies.map((copy) => copy.id);
+      before = this.cloneElements(copiedBoard.elements);
+    }
     this.elementDrag = {
-      ids: dragIds,
+      ids: movingIds,
       pointerId: event.pointerId,
       clientX: event.clientX,
       clientY: event.clientY,
-      before: this.cloneElements(board.elements),
+      before,
+      saveBefore,
     };
     this.pendingElementClickId = element.id;
-    this.draggingElementId.set(element.id);
+    this.draggingElementId.set(movingIds[0] ?? element.id);
     this.beginLocalEdit();
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
@@ -845,22 +1451,118 @@ export class BoardPage implements OnInit, OnDestroy {
     const board = this.board();
     if (!board) return;
     const zoom = this.viewport().zoom;
-    const dx = ((event.clientX - drag.clientX) / zoom / sceneWidth) * 100;
-    const dy = ((event.clientY - drag.clientY) / zoom / sceneHeight) * 100;
+    let dx = ((event.clientX - drag.clientX) / zoom / sceneWidth) * 100;
+    let dy = ((event.clientY - drag.clientY) / zoom / sceneHeight) * 100;
     const moveIds = new Set(drag.ids);
     const beforeById = new Map(drag.before.map((item) => [item.id, item]));
+    const primary = beforeById.get(this.draggingElementId() ?? "");
+    const verticalGuides: number[] = [];
+    const horizontalGuides: number[] = [];
+    if (primary) {
+      const bounds = this.elementBounds(primary);
+      const snapThresholdX = (8 / (sceneWidth * zoom)) * 100;
+      const vertical = this.findSnap(
+        [
+          bounds.left + dx,
+          (bounds.left + bounds.right) / 2 + dx,
+          bounds.right + dx,
+        ],
+        board.elements
+          .filter((element) => !moveIds.has(element.id))
+          .flatMap((element) => {
+            const other = this.elementBounds(element);
+            return [other.left, (other.left + other.right) / 2, other.right];
+          }),
+        snapThresholdX,
+      );
+      if (vertical) {
+        dx += vertical.adjustment;
+        verticalGuides.push(vertical.position);
+      }
+      const movingLeft = bounds.left + dx;
+      const movingWidth = bounds.right - bounds.left;
+      const movingCenterY = (bounds.top + bounds.bottom) / 2 + dy;
+      const rowThreshold = (8 / (sceneHeight * zoom)) * 100;
+      const horizontalNeighbors = board.elements
+        .filter(
+          (element) =>
+            !moveIds.has(element.id) &&
+            element.type !== "line" &&
+            element.type !== "stroke",
+        )
+        .map((element) => this.elementBounds(element))
+        .sort((first, second) => first.left - second.left);
+      let equalSpacingSnap:
+        { adjustment: number; left: number; right: number } | undefined;
+      for (let index = 0; index < horizontalNeighbors.length - 1; index += 1) {
+        const left = horizontalNeighbors[index];
+        const right = horizontalNeighbors[index + 1];
+        if (
+          !left ||
+          !right ||
+          left.right > right.left ||
+          right.left - left.right < movingWidth ||
+          Math.abs((left.top + left.bottom - right.top - right.bottom) / 2) >
+            rowThreshold ||
+          Math.abs(movingCenterY - (left.top + left.bottom) / 2) > rowThreshold
+        ) {
+          continue;
+        }
+        const targetLeft =
+          left.right + (right.left - left.right - movingWidth) / 2;
+        const adjustment = targetLeft - movingLeft;
+        if (
+          Math.abs(adjustment) <= snapThresholdX &&
+          (!equalSpacingSnap ||
+            Math.abs(adjustment) < Math.abs(equalSpacingSnap.adjustment))
+        ) {
+          equalSpacingSnap = {
+            adjustment,
+            left: left.right,
+            right: right.left,
+          };
+        }
+      }
+      if (equalSpacingSnap) {
+        dx += equalSpacingSnap.adjustment;
+        verticalGuides.push(equalSpacingSnap.left, equalSpacingSnap.right);
+      }
+      const horizontal = this.findSnap(
+        [
+          bounds.top + dy,
+          (bounds.top + bounds.bottom) / 2 + dy,
+          bounds.bottom + dy,
+        ],
+        board.elements
+          .filter((element) => !moveIds.has(element.id))
+          .flatMap((element) => {
+            const other = this.elementBounds(element);
+            return [other.top, (other.top + other.bottom) / 2, other.bottom];
+          }),
+        (8 / (sceneHeight * zoom)) * 100,
+      );
+      if (horizontal) {
+        dy += horizontal.adjustment;
+        horizontalGuides.push(horizontal.position);
+      }
+    }
+    this.alignmentGuides.set({
+      vertical: [...new Set(verticalGuides)],
+      horizontal: [...new Set(horizontalGuides)],
+    });
     this.board.set({
       ...board,
       elements: board.elements.map((element) => {
         if (moveIds.has(element.id)) {
           const original = beforeById.get(element.id) ?? element;
           if (element.type === "line") {
+            if (original.type !== "line") return element;
             return {
               ...element,
               x: this.clampCoordinate(original.x + dx),
               y: this.clampCoordinate(original.y + dy),
-              endX: this.clampCoordinate(element.endX + dx),
-              endY: this.clampCoordinate(element.endY + dy),
+              endX: this.clampCoordinate(original.endX + dx),
+              endY: this.clampCoordinate(original.endY + dy),
             };
           }
           return {
@@ -898,6 +1600,7 @@ export class BoardPage implements OnInit, OnDestroy {
     if (!drag || drag.pointerId !== event.pointerId) return;
     this.elementDrag = undefined;
     this.draggingElementId.set(null);
+    this.alignmentGuides.set({ vertical: [], horizontal: [] });
     const clickedId = this.pendingElementClickId;
     globalThis.setTimeout(() => {
       if (this.pendingElementClickId === clickedId) {
@@ -910,9 +1613,9 @@ export class BoardPage implements OnInit, OnDestroy {
       this.finishPendingRefresh();
       return;
     }
-    const moved = !this.sameElements(drag.before, board.elements);
+    const moved = !this.sameElements(drag.saveBefore, board.elements);
     if (moved) {
-      this.saveElements(board.elements, drag.before);
+      this.saveElements(board.elements, drag.saveBefore);
     } else {
       this.finishPendingRefresh();
     }
@@ -998,6 +1701,10 @@ export class BoardPage implements OnInit, OnDestroy {
   }
 
   private focusEditableElement(id: string): void {
+    if (this.isSaving()) {
+      this.pendingFocusElementId = id;
+      return;
+    }
     this.editingElementId.set(id);
     this.setTimeout(() => {
       const element = this.canvas?.nativeElement.querySelector<HTMLElement>(
@@ -1082,7 +1789,8 @@ export class BoardPage implements OnInit, OnDestroy {
     const board = this.board();
     if (
       !board?.elements.some(
-        (element) => element.id === id && element.type === "stroke",
+        (element) =>
+          element.id === id && element.type === "stroke" && !element.locked,
       )
     ) {
       return;
@@ -1099,6 +1807,26 @@ export class BoardPage implements OnInit, OnDestroy {
 
   private updateCreationRectangle(start: BoardPoint, end: BoardPoint): void {
     this.creationRectangle.set(this.normalizedRectangle(start, end));
+  }
+
+  private findSnap(
+    moving: number[],
+    targets: number[],
+    threshold: number,
+  ): { adjustment: number; position: number } | null {
+    let best: { adjustment: number; position: number } | null = null;
+    for (const value of moving) {
+      for (const target of targets) {
+        const adjustment = target - value;
+        if (
+          Math.abs(adjustment) <= threshold &&
+          (!best || Math.abs(adjustment) < Math.abs(best.adjustment))
+        ) {
+          best = { adjustment, position: target };
+        }
+      }
+    }
+    return best;
   }
 
   private normalizedRectangle(
@@ -1258,6 +1986,12 @@ export class BoardPage implements OnInit, OnDestroy {
   }
 
   private cancelGesture(): void {
+    if (this.elementDrag) {
+      const board = this.board();
+      if (board) {
+        this.board.set({ ...board, elements: this.elementDrag.saveBefore });
+      }
+    }
     if (this.eraseBefore) {
       const board = this.board();
       if (board) this.board.set({ ...board, elements: this.eraseBefore });
@@ -1274,6 +2008,7 @@ export class BoardPage implements OnInit, OnDestroy {
     this.linePreview.set(null);
     this.canvasPanning.set(false);
     this.draggingElementId.set(null);
+    this.alignmentGuides.set({ vertical: [], horizontal: [] });
     this.hasLocalEdit = false;
   }
 
@@ -1329,6 +2064,7 @@ export class BoardPage implements OnInit, OnDestroy {
     if (!this.canEdit() || this.isSaving()) return;
     const board = this.board();
     if (!board) return;
+    if (board.elements.find((element) => element.id === id)?.locked) return;
     const elements = this.removeElements(board.elements, new Set([id]));
     if (elements.length === board.elements.length) return;
     this.setSelection(
@@ -1453,6 +2189,297 @@ export class BoardPage implements OnInit, OnDestroy {
 
   drawingPointString(points = this.drawingPoints()): string {
     return points.map((point) => `${point.x},${point.y}`).join(" ");
+  }
+
+  private selectedElements(): BoardElement[] {
+    const ids = new Set(this.selectedElementIds());
+    return (this.board()?.elements ?? []).filter((element) =>
+      ids.has(element.id),
+    );
+  }
+
+  private isTypingTarget(target: EventTarget | null): boolean {
+    return (
+      target instanceof HTMLElement &&
+      !!target.closest(
+        "input:not([readonly]), textarea:not([readonly]), select, [contenteditable='true'], [role='textbox']",
+      )
+    );
+  }
+
+  private parseClipboardElements(text: string): BoardElement[] | null {
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      return null;
+    }
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return null;
+    }
+    const payload = value as Record<string, unknown>;
+    const elements = payload["elements"];
+    if (
+      payload["format"] !== "pinit-elements-v1" ||
+      !Array.isArray(elements) ||
+      !elements.every((element) => this.isClipboardElement(element))
+    ) {
+      return null;
+    }
+    return elements;
+  }
+
+  private isClipboardElement(value: unknown): value is BoardElement {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return false;
+    }
+    const element = value as Record<string, unknown>;
+    if (
+      typeof element["id"] !== "string" ||
+      typeof element["x"] !== "number" ||
+      typeof element["y"] !== "number" ||
+      (element["locked"] !== undefined &&
+        typeof element["locked"] !== "boolean")
+    ) {
+      return false;
+    }
+    switch (element["type"]) {
+      case "note":
+        return (
+          typeof element["text"] === "string" &&
+          this.isNoteColor(element["color"])
+        );
+      case "text":
+        return (
+          typeof element["text"] === "string" &&
+          typeof element["width"] === "number" &&
+          this.isNoteColor(element["color"])
+        );
+      case "card":
+        return (
+          typeof element["title"] === "string" &&
+          typeof element["text"] === "string" &&
+          typeof element["width"] === "number" &&
+          typeof element["height"] === "number"
+        );
+      case "shape":
+        return (
+          typeof element["shape"] === "string" &&
+          typeof element["width"] === "number" &&
+          typeof element["height"] === "number" &&
+          this.isNoteColor(element["color"])
+        );
+      case "stroke":
+        return (
+          typeof element["width"] === "number" &&
+          typeof element["height"] === "number" &&
+          Array.isArray(element["points"]) &&
+          this.isNoteColor(element["color"]) &&
+          typeof element["strokeWidth"] === "number"
+        );
+      case "line":
+        return (
+          typeof element["endX"] === "number" &&
+          typeof element["endY"] === "number" &&
+          (element["startElementId"] === null ||
+            typeof element["startElementId"] === "string") &&
+          (element["endElementId"] === null ||
+            typeof element["endElementId"] === "string") &&
+          this.isNoteColor(element["color"]) &&
+          typeof element["strokeWidth"] === "number"
+        );
+      case "sticker":
+        return typeof element["emoji"] === "string";
+      case "comment":
+        return typeof element["text"] === "string";
+      case "frame":
+        return (
+          typeof element["title"] === "string" &&
+          typeof element["width"] === "number" &&
+          typeof element["height"] === "number"
+        );
+      default:
+        return false;
+    }
+  }
+
+  private isNoteColor(value: unknown): value is NoteColor {
+    return (
+      value === "rose" ||
+      value === "cream" ||
+      value === "sage" ||
+      value === "sky"
+    );
+  }
+
+  private pasteElements(source: BoardElement[]): void {
+    const board = this.board();
+    if (!board || board.elements.length + source.length > 500) {
+      this.errorMessage.set("This board can hold at most 500 items.");
+      return;
+    }
+    const sourceBounds = source.map((element) => this.elementBounds(element));
+    const left = Math.min(...sourceBounds.map((bounds) => bounds.left));
+    const top = Math.min(...sourceBounds.map((bounds) => bounds.top));
+    const copies = this.cloneWithNewIds(source, {
+      x: this.lastPointerPoint.x - left,
+      y: this.lastPointerPoint.y - top,
+    });
+    this.insertCopies(copies);
+  }
+
+  private pasteGrid(grid: string[][]): void {
+    const board = this.board();
+    const cellCount = grid.reduce((total, row) => total + row.length, 0);
+    if (!board || !cellCount) return;
+    if (board.elements.length + cellCount > 500) {
+      this.errorMessage.set("This board can hold at most 500 items.");
+      return;
+    }
+    if (grid.some((row) => row.some((cell) => cell.length > 2000))) {
+      this.errorMessage.set("A pasted cell is longer than 2,000 characters.");
+      return;
+    }
+    const startX = Math.min(this.lastPointerPoint.x, 100 - 10);
+    const startY = Math.min(this.lastPointerPoint.y, 100 - 15);
+    const notes: BoardElement[] = [];
+    grid.forEach((row, rowIndex) => {
+      row.forEach((text, columnIndex) => {
+        const element = this.createElement(
+          "note",
+          this.clampCoordinate(startX + columnIndex * 11),
+          this.clampCoordinate(startY + rowIndex * 16),
+        );
+        if (element.type === "note") {
+          notes.push({ ...element, text });
+        }
+      });
+    });
+    this.insertCopies(notes);
+  }
+
+  private insertCopies(copies: BoardElement[]): void {
+    const board = this.board();
+    if (!board || !copies.length) return;
+    const before = this.cloneElements(board.elements);
+    this.saveElements([...board.elements, ...copies], before);
+    this.setSelection(copies.map((element) => element.id));
+  }
+
+  private cloneWithNewIds(
+    source: BoardElement[],
+    offset: BoardPoint,
+  ): BoardElement[] {
+    const ids = new Map(
+      source.map((element) => [element.id, crypto.randomUUID()]),
+    );
+    return source.map((element) => {
+      const position = {
+        x: this.clampCoordinate(element.x + offset.x),
+        y: this.clampCoordinate(element.y + offset.y),
+      };
+      const id = ids.get(element.id) ?? crypto.randomUUID();
+      if (element.type === "line") {
+        return {
+          ...element,
+          id,
+          ...position,
+          endX: this.clampCoordinate(element.endX + offset.x),
+          endY: this.clampCoordinate(element.endY + offset.y),
+          startElementId: ids.get(element.startElementId ?? "") ?? null,
+          endElementId: ids.get(element.endElementId ?? "") ?? null,
+        };
+      }
+      return { ...element, id, ...position };
+    });
+  }
+
+  private fitElementsToScreen(elements: BoardElement[]): void {
+    const canvas = this.canvas?.nativeElement;
+    if (!canvas) return;
+    if (!elements.length) {
+      this.resetView();
+      return;
+    }
+    const bounds = elements.map((element) => this.elementBounds(element));
+    const left = Math.min(...bounds.map((entry) => entry.left));
+    const top = Math.min(...bounds.map((entry) => entry.top));
+    const right = Math.max(...bounds.map((entry) => entry.right));
+    const bottom = Math.max(...bounds.map((entry) => entry.bottom));
+    const width = Math.max(2, ((right - left) / 100) * sceneWidth);
+    const height = Math.max(2, ((bottom - top) / 100) * sceneHeight);
+    const viewportBounds = canvas.getBoundingClientRect();
+    const zoom = Math.max(
+      0.3,
+      Math.min(
+        2.5,
+        (viewportBounds.width * 0.88) / width,
+        (viewportBounds.height * 0.88) / height,
+      ),
+    );
+    const centerX = ((left + right) / 2 / 100) * sceneWidth;
+    const centerY = ((top + bottom) / 2 / 100) * sceneHeight;
+    this.viewport.set({
+      zoom,
+      x: (sceneWidth / 2 - centerX) * zoom,
+      y: (sceneHeight / 2 - centerY) * zoom,
+    });
+  }
+
+  private convertElementType(element: BoardElement): BoardElement {
+    const width = this.itemWidth(element);
+    const height = this.itemHeight(element) ?? 10;
+    const text =
+      element.type === "card"
+        ? [element.title, element.text].filter(Boolean).join("\n")
+        : "text" in element
+          ? (element.text ?? "")
+          : "";
+    const color =
+      "color" in element && this.isNoteColor(element.color)
+        ? element.color
+        : "cream";
+    if (element.type === "note") {
+      return {
+        id: element.id,
+        type: "shape",
+        shape: "rectangle",
+        x: element.x,
+        y: element.y,
+        width,
+        height,
+        color: element.color,
+        text: element.text,
+        ...(element.locked === undefined ? {} : { locked: element.locked }),
+      };
+    }
+    if (element.type === "shape") {
+      return {
+        id: element.id,
+        type: "card",
+        x: element.x,
+        y: element.y,
+        title: "Card",
+        text,
+        width,
+        height,
+        ...(element.locked === undefined ? {} : { locked: element.locked }),
+      };
+    }
+    if (element.type === "card" || element.type === "text") {
+      return {
+        id: element.id,
+        type: "note",
+        x: element.x,
+        y: element.y,
+        text,
+        color,
+        width,
+        height,
+        ...(element.locked === undefined ? {} : { locked: element.locked }),
+      };
+    }
+    return element;
   }
 
   private autoTextWidth(text: string): number {
@@ -1589,10 +2616,12 @@ export class BoardPage implements OnInit, OnDestroy {
     const worldY =
       (clientY - bounds.top - bounds.height / 2 - view.y) / view.zoom +
       sceneHeight / 2;
-    return {
+    const point = {
       x: Math.max(0, Math.min(100, (worldX / sceneWidth) * 100)),
       y: Math.max(0, Math.min(100, (worldY / sceneHeight) * 100)),
     };
+    this.lastPointerPoint = point;
+    return point;
   }
 
   private updateElementLocally(
@@ -1604,7 +2633,7 @@ export class BoardPage implements OnInit, OnDestroy {
     this.board.set({
       ...board,
       elements: board.elements.map((element) =>
-        element.id === id ? update(element) : element,
+        element.id === id && !element.locked ? update(element) : element,
       ),
     });
   }
@@ -1644,9 +2673,13 @@ export class BoardPage implements OnInit, OnDestroy {
             this.redoStack.length = 0;
             this.updateHistoryDepths();
           }
+          const pendingFocusId = this.pendingFocusElementId;
+          this.pendingFocusElementId = undefined;
+          if (pendingFocusId) this.focusEditableElement(pendingFocusId);
           this.finishPendingRefresh();
         },
         error: (error: HttpErrorResponse) => {
+          this.pendingFocusElementId = undefined;
           this.isSaving.set(false);
           this.saveState.set("Not saved");
           this.board.set({ ...board, elements: before });

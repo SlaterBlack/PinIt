@@ -154,6 +154,7 @@
           [class]="itemClass(item)"
           [class.is-selected]="selectedElementIds().includes(item.id)"
           [class.is-dragging]="draggingElementId() === item.id"
+          [class.is-locked]="item.locked"
           [attr.data-element-id]="item.id"
           [style.left.%]="itemLeft(item)"
           [style.top.%]="itemTop(item)"
@@ -169,22 +170,42 @@
           <button
             type="button"
             class="item-drag-handle"
-            [disabled]="!canEdit()"
+            [disabled]="!canEdit() || item.locked"
             [attr.aria-label]="'Move ' + item.type"
             title="Drag to move"
             (click)="$event.stopPropagation()"
           >
             ⠿
           </button>
-          @switch (item.type) { @case ("note") {
+          @if (item.locked) {
+          <span class="item-lock-indicator" aria-label="Locked" title="Locked">
+            🔒
+          </span>
+          } @if (canEdit() && selectedTool() === 'select' &&
+          selectedElementIds().includes(item.id) && !item.locked && (item.type
+          === 'note' || item.type === 'shape' || item.type === 'card')) { @for
+          (direction of connectionDirections; track direction.id) {
+          <button
+            type="button"
+            class="connection-dot"
+            [class]="'connection-dot dot-' + direction.id"
+            [attr.aria-label]="'Create connected item ' + direction.id"
+            [title]="'Create connected item ' + direction.id"
+            (pointerdown)="$event.stopPropagation()"
+            (click)="createConnectedElement(item, direction.id); $event.stopPropagation()"
+          >
+            {{ direction.icon }}
+          </button>
+          } } @switch (item.type) { @case ("note") {
           <textarea
             aria-label="Sticky note text"
             maxlength="2000"
-            [readonly]="!canEdit() || editingElementId() !== item.id"
+            [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
             (focus)="beginTextEdit(item.id)"
             (blur)="saveTextEdit()"
+            (keydown)="spawnNextSticky(item.id, $event)"
             placeholder="Write an idea…"
           ></textarea>
           } @case ("text") {
@@ -192,7 +213,7 @@
             class="plain-text"
             aria-label="Board text"
             maxlength="2000"
-            [readonly]="!canEdit() || editingElementId() !== item.id"
+            [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
             (focus)="beginTextEdit(item.id)"
@@ -204,7 +225,7 @@
             class="item-title"
             aria-label="Card title"
             maxlength="120"
-            [readonly]="!canEdit() || editingElementId() !== item.id"
+            [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.title"
             (ngModelChange)="changeElementTitle(item.id, $event)"
             (focus)="beginTextEdit(item.id)"
@@ -213,7 +234,7 @@
           <textarea
             aria-label="Card text"
             maxlength="2000"
-            [readonly]="!canEdit() || editingElementId() !== item.id"
+            [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
             (focus)="beginTextEdit(item.id)"
@@ -224,6 +245,7 @@
           <textarea
             aria-label="Shape text"
             maxlength="2000"
+            [readonly]="!canEdit() || isSaving()"
             [ngModel]="item.text ?? ''"
             (ngModelChange)="changeElementText(item.id, $event)"
             (focus)="beginTextEdit(item.id)"
@@ -284,7 +306,7 @@
           <textarea
             aria-label="Comment"
             maxlength="2000"
-            [readonly]="!canEdit() || editingElementId() !== item.id"
+            [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.text"
             (ngModelChange)="changeElementText(item.id, $event)"
             (focus)="beginTextEdit(item.id)"
@@ -298,7 +320,7 @@
             class="item-title"
             aria-label="Frame title"
             maxlength="120"
-            [readonly]="!canEdit() || editingElementId() !== item.id"
+            [readonly]="!canEdit() || isSaving() || editingElementId() !== item.id"
             [ngModel]="item.title"
             (ngModelChange)="changeElementTitle(item.id, $event)"
             (focus)="beginTextEdit(item.id)"
@@ -308,6 +330,7 @@
           <button
             type="button"
             class="item-delete"
+            [disabled]="item.locked"
             aria-label="Delete item"
             title="Delete item"
             (pointerdown)="$event.stopPropagation()"
@@ -365,6 +388,10 @@
             [attr.y2]="line.end.y"
           />
         </svg>
+        } @for (guide of alignmentGuides().vertical; track guide) {
+        <div class="alignment-guide vertical" [style.left.%]="guide"></div>
+        } @for (guide of alignmentGuides().horizontal; track guide) {
+        <div class="alignment-guide horizontal" [style.top.%]="guide"></div>
         }
       </div>
       @if (selectedElementIds().length > 0 && selectedTool() === 'select' &&
@@ -392,6 +419,16 @@
         >
           Delete
         </button>
+        @if (selectedElementIds().length > 1) {
+        <button type="button" (click)="tidySelection()">Tidy</button>
+        } @if (canSwitchSelectionType()) {
+        <button type="button" (click)="switchSelectedType()">
+          Switch type
+        </button>
+        }
+        <button type="button" (click)="toggleSelectionLock()">
+          {{ selectionHasLockedItems() ? 'Unlock' : 'Lock' }}
+        </button>
       </div>
       } @if (contextMenu(); as menu) {
       <div
@@ -401,9 +438,11 @@
         (pointerdown)="$event.stopPropagation()"
         (click)="$event.stopPropagation()"
       >
-        @if (menu.targetId && canEdit()) {
-        <button type="button" (click)="contextDelete()">Delete item</button>
+        @if (menu.targetId && canEdit()) { @if (contextTargetLocked()) {
+        <button type="button" (click)="contextToggleLock()">Unlock item</button>
         } @else {
+        <button type="button" (click)="contextDelete()">Delete item</button>
+        } } @else {
         <button type="button" (click)="resetView()">Reset view</button>
         }
       </div>
@@ -423,5 +462,35 @@
       </div>
     </section>
   </div>
-  }
+  @if (paletteOpen()) {
+  <div class="palette-backdrop" (click)="closeCommandPalette()">
+    <section
+      class="command-palette"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+      (click)="$event.stopPropagation()"
+      (pointerdown)="$event.stopPropagation()"
+    >
+      <input
+        #commandInput
+        type="search"
+        aria-label="Search board commands"
+        placeholder="Search tools and actions…"
+        [ngModel]="paletteQuery()"
+        (ngModelChange)="paletteQuery.set($event)"
+        (keydown.enter)="executeFirstPaletteCommand($event)"
+      />
+      <div class="command-results">
+        @for (command of matchingPaletteCommands(); track command.id) {
+        <button type="button" (click)="executePaletteCommand(command.id)">
+          {{ command.label }}
+        </button>
+        } @empty {
+        <p>No matching commands</p>
+        }
+      </div>
+    </section>
+  </div>
+  } }
 </main>

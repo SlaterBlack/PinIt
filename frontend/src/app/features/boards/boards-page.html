@@ -84,15 +84,17 @@
     <div class="board-list">
       @for (board of boards(); track board.id) {
       <article class="board-card card">
-        <div class="board-card-copy">
-          <h3><a [routerLink]="['/boards', board.id]">{{ board.title }}</a></h3>
-          <span class="board-permission">{{ board.permission }}</span>
-        </div>
+        <a class="board-card-link" [routerLink]="['/boards', board.id]">
+          <div class="board-card-copy">
+            <h3>{{ board.title }}</h3>
+            <span class="board-permission">{{ board.permission }}</span>
+          </div>
+        </a>
         @if (board.permission === 'owner' || board.permission === 'admin') {
         <button
           class="btn btn-danger"
           type="button"
-          (click)="deleteBoard(board)"
+          (click)="$event.stopPropagation(); deleteBoard(board)"
         >
           Delete
         </button>

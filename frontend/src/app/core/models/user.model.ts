@@ -1,12 +1,13 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 export type UserTheme = "default" | "retro";
+export type UserRole = "admin" | "user";
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  role?: "admin" | "user";
+  role?: UserRole;
   theme?: UserTheme | null;
 }
 

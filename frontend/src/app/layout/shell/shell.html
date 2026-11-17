@@ -4,13 +4,13 @@
       class="navbar-brand"
       type="button"
       aria-haspopup="menu"
-      aria-label="PinIT, switch service"
+      aria-label="PinIt, switch service"
       [attr.aria-expanded]="isServiceMenuOpen()"
       [attr.aria-controls]="isServiceMenuOpen() ? 'service-menu' : null"
       (click)="toggleServiceMenu()"
     >
       <img src="/PinIt_32.png" width="24" height="24" alt="" />
-      <span>Pin<span class="brand-accent">IT</span></span>
+      <span>Pin<span class="brand-accent">I</span>t</span>
       <svg
         class="service-switcher-chevron"
         viewBox="0 0 16 16"
@@ -103,6 +103,11 @@
         >
           Appearance
         </button>
+        @if (auth.isAdmin()) {
+        <a routerLink="/users" role="menuitem" (click)="closeAccountMenu()">
+          Manage users
+        </a>
+        }
         <button type="button" role="menuitem" (click)="logout()">
           Log out
         </button>
@@ -129,11 +134,11 @@
     aria-labelledby="install-title"
     (click)="$event.stopPropagation()"
   >
-    <h2 id="install-title">Install PinIT</h2>
+    <h2 id="install-title">Install PinIt</h2>
     @if (installError()) {
     <p class="install-error" role="alert">{{ installError() }}</p>
     } @if (isAppleDevice) {
-    <p>To add PinIT to your iPhone or iPad home screen:</p>
+    <p>To add PinIt to your iPhone or iPad home screen:</p>
     <ol>
       <li>In Safari, tap <strong>Share</strong>.</li>
       <li>Choose <strong>Add to Home Screen</strong>.</li>
@@ -147,7 +152,7 @@
     } @else {
     <p>
       In Chrome, use the install icon in the address bar or choose
-      <strong>Install PinIT</strong> from the browser menu.
+      <strong>Install PinIt</strong> from the browser menu.
     </p>
     }
     <div class="install-dialog-actions">

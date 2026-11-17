@@ -13,11 +13,7 @@
   gap: var(--space-xl);
   padding: 0 clamp(var(--space-md), 4vw, 3rem);
   border-bottom: 1px solid var(--color-border);
-  background: color-mix(
-    in srgb,
-    var(--color-surface) 94%,
-    var(--color-secondary)
-  );
+  background: var(--color-surface);
   box-shadow: 0 4px 18px rgb(85 51 55 / 6%);
   backdrop-filter: blur(12px);
 }

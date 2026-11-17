@@ -19,6 +19,9 @@ export class Auth {
     this.readStoredUser(),
   );
   readonly currentUser = this.currentUserSignal.asReadonly();
+  readonly isAdmin = computed(
+    () => this.currentUserSignal()?.role === "admin",
+  );
   private readonly accountThemeSignal = signal<UserTheme | null>(null);
   readonly accountTheme = this.accountThemeSignal.asReadonly();
   private readonly accountThemeLoadedSignal = signal(false);

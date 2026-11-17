@@ -1,26 +1,26 @@
 .boards-page {
-  max-width: 1120px;
+  width: min(100%, 1120px);
   margin: 0 auto;
+  padding: clamp(var(--space-md), 3vw, 2rem);
 }
 
 .page-heading {
-  margin-bottom: clamp(var(--space-lg), 5vw, 3rem);
+  margin-bottom: var(--space-lg);
 
   h1 {
     max-width: 720px;
     margin: 0 0 var(--space-sm);
     color: var(--color-text);
-    font-size: clamp(2rem, 5vw, 3.25rem);
-    letter-spacing: -0.055em;
+    font-size: clamp(1.7rem, 3vw, 2rem);
   }
 }
 
 .eyebrow {
   margin: 0 0 var(--space-xs);
   color: var(--color-accent);
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -28,7 +28,7 @@
   max-width: 620px;
   margin: 0;
   color: var(--color-text-muted);
-  font-size: 1rem;
+  font-size: 0.9rem;
 }
 
 .board-start-grid {
@@ -42,12 +42,12 @@
   min-height: 300px;
   flex-direction: column;
   align-items: flex-start;
-  padding: clamp(var(--space-lg), 4vw, 2rem);
+  padding: var(--space-lg);
 
   h2 {
     margin: 0 0 var(--space-sm);
     color: var(--color-text);
-    font-size: 1.3rem;
+    font-size: 1.1rem;
   }
 
   > p:not(.eyebrow) {

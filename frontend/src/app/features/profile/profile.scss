@@ -1,6 +1,7 @@
 .profile-page {
-  width: min(100% - 2rem, 760px);
-  margin: clamp(2rem, 6vw, 4rem) auto;
+  width: min(100%, 1500px);
+  margin: 0 auto;
+  padding: clamp(var(--space-md), 3vw, 2rem);
 }
 
 .profile-heading {

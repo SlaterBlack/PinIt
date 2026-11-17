@@ -1,5 +1,5 @@
 .login-page {
-  --login-background: #f5ebd8;
+  --login-background: #faf4e9;
   --login-surface: #fffaf0;
   --login-primary: #c08085;
   --login-accent: #874f59;
@@ -17,18 +17,7 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background:
-    radial-gradient(
-      ellipse at 18% 12%,
-      color-mix(in srgb, var(--login-primary) 22%, transparent),
-      transparent 34rem
-    ),
-    radial-gradient(
-      ellipse at 85% 88%,
-      color-mix(in srgb, var(--login-accent) 9%, transparent),
-      transparent 28rem
-    ),
-    var(--login-background);
+  background: var(--login-background);
 }
 
 .login-card {
